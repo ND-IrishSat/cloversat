@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 import os
-from distutils.core import setup, Extension
+# from distutils.core import setup, Extension
+from setuptools import setup, Extension
 
 additional_libs = None
 if os.name == 'nt':

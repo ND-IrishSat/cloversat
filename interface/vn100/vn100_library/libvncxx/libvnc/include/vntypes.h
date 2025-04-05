@@ -14,7 +14,9 @@
 	/* Must not have C99. */
 
 	/** Backup definition of size_t. */
-	typedef unsigned int size_t;
+	// typedef unsigned int size_t;
+    #include <stddef.h>
+
 
 #endif
 

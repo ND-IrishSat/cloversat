@@ -6,6 +6,8 @@ motor interface class
 checks hall sensors readings and sets reaction wheel speeds
 initialization must be done through init.py
 
+also contains function to convert pwm signals to predicted RPM
+
 '''
 from board import SCL, SDA
 import busio
@@ -46,6 +48,58 @@ dirZ = 6
 hallX = [13,19,26]
 hallY = [8,7,1]
 hallZ = [16,20,21]
+
+class params:
+    # Importing motor parameters - Maxon DCX 8 M (9 volts)
+    Rwa = 3.54      # Ohms, winding resistance at ambient temperature
+    Lw = 0.424e-3  # Henry
+    Kt = 8.82e-3   # Torque constant Nm/A
+    Kv = Kt    # Voltage constant V*s/rad
+    Jm = 5.1*(1e-7)   # Kg m^2
+    bm = 3.61e-6   # [N·m·s/rad] Viscous friction
+    Rha = 16.5      # K/W
+    Rwh = 2.66     # K/W
+    Cwa = 2.31/Rwh     # Thermal Capacitance
+    Cha = 162/Rha      # Thermal Capacitance
+    alpha_Cu = 0.00393 # copper's temperature coefficient [1/K]
+    # Moments of Inertia [g cm^2]- from CAD of CubeSat test bed
+    Ixx = 46535.388 
+    Ixy = 257.834 
+    Ixz = 536.12
+    Iyx = 257.834 
+    Iyy = 47934.771 
+    Iyz = -710.058
+    Izx = 546.12 
+    Izy = -710.058 
+    Izz = 23138.181
+
+    # Moment of Inertia Tensor of full 2U cubesat [kg m^2]
+    J_B = (1e-7)*np.array([[Ixx, Ixy, Ixz],
+                    [Iyx, Iyy, Iyz],
+                    [Izx, Izy, Izz]])
+    
+    J_B_inv = np.linalg.inv(J_B)
+
+    # Moments of Inertia of rxn wheels [g cm^2] - measured
+    Iw1 = (1/2)*38*1.8**2 # I_disc = 1/2 * M * R^2
+    Iw2 = Iw1 
+    Iw3 = Iw1 
+    Iw4 = Iw1
+
+    # Moment of inertia tensor of rxn wheels [kg m^2]
+    J_w = (1e-7)*np.array([[Iw1, 0, 0, 0],
+                    [0, Iw2, 0, 0],
+                    [0, 0, Iw3, 0],
+                    [0, 0, 0, Iw4]])
+
+    # External torques (later this can be from magnetorquers)
+    L_B = np.array([0, 0, 0])
+
+    # Transformation matrix for NASA config given in Fundamentals pg
+    # 153-154
+    W = np.array([[1, 0, 0, 1/np.sqrt(3)],
+            [0, 1, 0, 1/np.sqrt(3)],
+            [0, 0, 1, 1/np.sqrt(3)]])
 
 # motor class!
 class Motor():

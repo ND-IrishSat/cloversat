@@ -23,10 +23,14 @@
 from xml.sax.handler import DTDHandler
 import numpy as np
 import time
-# import pyshtools.legendre as legendre
+#import pyshtools.legendre as legendre
 import matplotlib.pyplot as plt
 
-from PySOL.legendre import ssn_lpmv
+import sys, os
+# add current directory to path variable so that we can find legendre.py
+sys.path.append(os.path.dirname(__file__))
+from legendre import ssn_lpmv
+
 class WMMCoefficientLoader():
     ''' Class to load and hold model coefficients from reference epoch the WMM geomagnetic model for nth degree  
     model
@@ -60,7 +64,7 @@ class WMMCoefficientLoader():
             file_name (str): name of csv file to read coefficients from
         '''
         
-        data = np.loadtxt('ukf/PySOL/WMMcoef.csv')
+        data = np.loadtxt('sim/PySOL/WMMcoef.csv')
         
         self.g_ = data[:, 0]
         self.h_ = data[:, 1]
@@ -178,8 +182,8 @@ class WMM():
         '''
         
         if degrees:
-            lat_gd *= np.pi/180.0
-            lon *= np.pi/180.0
+            lat_gd = lat_gd * np.pi/180.0
+            lon = lon * np.pi/180.0
             
         # Calculate radius of curvature of the prime vertical for given coordinates
         self.R_c = self.A / (np.sqrt(1-(self.f*(2-self.f))*(np.sin(lat_gd)**2)))
@@ -205,6 +209,7 @@ class WMM():
         self.legendre = []
         for i in np.arange(0, self.t.shape[0], 1):
             self.legendre.append(ssn_lpmv(self.degree+1, np.sin(self.GCC[0, i])))
+            #import pyshtools.legendre as legendre
             #self.legendre.append(legendre.PlmSchmidt(self.degree+1, np.sin(self.GCC[0, i])))
         self.legendre = np.array(self.legendre)    
         
@@ -368,24 +373,64 @@ class WMM():
         self.GCC = np.transpose(self.GCC)
         
     def get_Bfield(self):
-        ''' Function to return the B field components in the ellipsoidal reference frame '''
+        ''' Function to return the B field components in nanoTeslain the ellipsoidal reference frame '''
         return self.Bfield_ellip
-       
+
+
+def bfield_calc(controls):
+    '''
+    Calculates the current true magnetic field based on gps data input
+    
+    @params
+        controls: gps and time data for current time step (latitude, longitude, height in meters, time arrays) (1 x 4)
+
+    @returns
+        converted: true, earth centered (eci frame) magnetic field in microteslas (1 x 3)
+    '''
+    # get lat, long, and height from control input vector
+    lat = controls[0] 
+    long = controls[1]
+    height = controls[2] 
+
+    # time data formatted as 2023.percentage of the year in month type stuff
+    time = controls[3] 
+
+    # calculate wmm: b frame with respect to eci frame (earth-centered)
+    wmm_model = WMM(12, 'WMMcoef.csv')
+    wmm_model.calc_gcc_components(lat, long, height, time, degrees=True)
+    Bfield1 = wmm_model.get_Bfield()
+    
+    # Convert nanotesla to microtesla
+    converted = Bfield1 / 1000
+
+    return converted
+
+
 # Testing WMM model
 if __name__ == "__main__":
     
+    # h HAS TO BE ALTITUDE IN METERS!!!!
     num = 10_000
-    lat = -80.0*np.ones(num)
-    lon1 = 240.0*np.ones(num)
+    lat = np.array([41.675])
+    lon1 = np.array([-86.252])
     
-    h = 100000*np.ones(num)
-    t = 2022.5*np.ones(num)
+    h = np.array([0.219])
+    t = np.array([2024.10266])
+    # lat = -80.0*np.ones(num)
+    # lon1 = 240.0*np.ones(num)
+    # 
+    # h = 100000*np.ones(num)
+    # t = 2022.5*np.ones(num)
     
+    print(lat, lon1, h)
+
     time1 = time.time()
     print(f'Calculating B field over {num} number of points at given time')
+    
     wmm_model = WMM(12, 'WMMcoef.csv')
     wmm_model.calc_gcc_components(lat, lon1, h, t, degrees=True)
     Bfield1 = wmm_model.get_Bfield()
+
     time2 = time.time()
     print(f'Bfield: {Bfield1}')
     print(f'Calculated {num} number of times in {time2-time1} seconds')

@@ -66,3 +66,14 @@ def ssn_lpmv(n_max, x):
                 ssn_lpmv_vals[int(n_ite * (n_ite+1) / 2 + m_ite)] = np.sqrt(2 *np.math.factorial(n_ite - m_ite)/np.math.factorial(n_ite + m_ite) ) * lpmv_alt_not_vals[n_ite, m_ite]
     
     return ssn_lpmv_vals
+
+if __name__ == "__main__":
+    import pyshtools
+
+    print('Pyshtools output')
+    print(pyshtools.legendre.PlmSchmidt(12, 0.5))
+    print('----------------------\n')
+
+    print('Legendre')
+    print(ssn_lpmv(12, 0.5))
+    print('-----------------------\n')

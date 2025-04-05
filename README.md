@@ -1,4 +1,4 @@
-<h2 align="left">CloverSat Computing Projects for IrishSat 2023-2024</h2>
+<h2 align="left">CloverSat Computing Projects for IrishSat 2024-2025</h2>
 
 Collaborative base for developing Attitude Determination and Control System (ADCS), which include a Proportional-Integral-Derivative (PID) Controller and Unscented Kalman Filter (UKF) for state estimation.
 

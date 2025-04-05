@@ -1,5 +1,5 @@
 '''
-simulator.py
+visualizer.py
 Authors: Juwan Jacobe, Cody, Dao Wei, Martin, Jacob
 Last updated: 3/3/24
 

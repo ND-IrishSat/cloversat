@@ -18,13 +18,14 @@ from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from ukf.PySOL.wmm import *
-from ukf.simulator import *
+from sim.visualizer import *
 from adc.adc_pd_controller_numpy import pd_controller
 from ukf.UKF_algorithm import *
 import time
 # from interface.happy_sensors import get_imu_data, calibrate
 from interface.happy_sensors import *
 from ukf.hfunc import *
+from sim.PySOL import wmm
 from interface.motors import *
 from interface.hall import checkHall
 from interface.init import initialize_setup
@@ -150,7 +151,7 @@ def main(target=[1, 0, 0, 0]):
     alt = np.array([.225552]) # 740 feet (km)
 
     # calculate true B field at stenson-remick
-    B_true = bfield_calc(np.array([lat, longitude, alt, curr_date_time]))
+    B_true = wmm.bfield_calc(np.array([lat, longitude, alt, curr_date_time]))
 
     # Set negative of last element to match magnetometer
     # Convert to North East Down to North East Up, matching X, Y, Z reference frame of magnetometer

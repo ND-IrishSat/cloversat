@@ -15,7 +15,8 @@
 #elif __ORDER_BIG_ENDIAN__
 	#define VN_BIG_ENDIAN	1
 #else
-	#error "Unknown System"
+	// #error "Unknown System"
+	#define VN_LITTLE_ENDIAN	1
 #endif
 
 int VnApi_major(void)

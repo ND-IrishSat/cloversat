@@ -6,13 +6,11 @@ Last modified 10/7/23
 Runs IrishSat UKF on generated or real-time data and simulates CubeSat using pygame
 
 TODO:
-    FINE TUNE R AND Q FOR 1D TEST
     
     find freshman who wants to learn UKF
-    big latex adcs document???
     finish labeling equations in UKF_algorithm
 
-    for final banquet: don't use gps. instead, pre-generate magnetic fields for known simulated flight path for correct time step
+    note: in banquet_demo.py, we don't use gps. instead, pre-generate magnetic fields for known simulated flight path for correct time step
     add to ukf latex documentation: testing cases/results, R and Q research/results, more explanation
     update EOMs to 4 reaction wheels
     not important: interface with gps sensor, find what frame it gives us (ECEF or ECI?) and units?
@@ -28,16 +26,17 @@ import ukf.UKF_algorithm as UKF_algorithm
 import interface.gps_interface as gps_interface
 import ukf.ideal_test_cases as ideal_test_cases
 import ukf.hfunc as hfunc
-import ukf.simulator as simulator
+import sim.visualizer as simulator
+import sim.PySOL.wmm as wmm
 # from interface.happy_sensors import get_imu_data
 
-# from ukf.PySOL import spacecraft as sp
-# from ukf.PySol.spacecraft import *
-from ukf.PySOL.sol_sim import *
-import ukf.PySOL.spacecraft as sp
-import ukf.PySOL.orb_tools as ot
-# from ukf.PySOL import sol_sim
-# from ukf.PySOL import orb_tools as ot
+# from sim.PySOL import spacecraft as sp
+# from sim.PySol.spacecraft import *
+from sim.PySOL.sol_sim import *
+import sim.PySOL.spacecraft as sp
+import sim.PySOL.orb_tools as ot
+# from sim.PySOL import sol_sim
+# from sim.PySOL import orb_tools as ot
 
 
 def check_zeros(data):
@@ -67,6 +66,9 @@ def run_ukf_textfile(start, cov, r, q, filename):
         q: noise vector for sensors (1 x m)
         filename: text file of cleaned sensor data to read from (any length)
     '''
+
+    # set up orbital simulation so can find our position and height for every time step
+
     # startTime = 2022.321
     t0 = dt.datetime(2022, 3, 21, 0, 0, 0)
     # sim = sol_sim.Simulation(TIME = t0, mag_deg= 12)
@@ -80,11 +82,13 @@ def run_ukf_textfile(start, cov, r, q, filename):
 
     DT = dt.timedelta(hours = duration)
     # resolution = timestep. Must match with rest of ukf
+    dt_ukf = .1
     sim.propogate(DT, resolution =  .1)
     orb_laln = sim.scs[0].state_mat.LALN
     orb_h = ot.calc_h(sim.scs[0].state_mat.R_ECEF)
 
     # print(sim.scs[0].state_mat.R_ECEF.shape)
+    # latitude/longitude and height
     print(len(orb_laln))
     print(len(orb_h))
 
@@ -93,7 +97,7 @@ def run_ukf_textfile(start, cov, r, q, filename):
     lat = np.array([41.675])
     long = np.array([-86.252])
     alt = np.array([225.552]) # 740 feet (this is in meters)
-    B_true = hfunc.bfield_calc(np.array([lat, long, alt, curr_date_time]))
+    B_true = wmm.bfield_calc(np.array([lat, long, alt, curr_date_time]))
 
     # find absolute path to text file
     script_path = os.path.abspath(__file__)
@@ -104,20 +108,23 @@ def run_ukf_textfile(start, cov, r, q, filename):
     data = f.readline()
     splitData2 = np.array([float(x) for x in data.split(",")])
     # for test-still: accelerometer, gyro, magnetometer (microteslas)
+    # data is in the form of magnetic field (bx, by, zy) and angular velocity (wx, wy, wz)
     splitData = np.concatenate((splitData2[6:], splitData2[3:6]))
 
-    reaction_speeds = np.zeros(3)
+    reaction_speeds = np.zeros(4)
     i = 0
-    while(data):
-        # get gps data and add time stamp
+    while(i < len(orb_laln) and data):
         # gps_data = gps_interface.get_gps_data()
         # gps_data = gps_interface.ecef_to_latlong(gps_data[0], gps_data[1], gps_data[2]) # add time
 
+        # get gps data and add time stamp
         gps_data = np.array([np.array([orb_laln[i][0]]), np.array([orb_laln[i][1]]), np.array([orb_h[i]]), np.array([2022.257])])
 
         gps_data = B_true
         # run ukf and visualize output
-        start, cov = UKF_algorithm.UKF(start, cov, q, r, gps_data, reaction_speeds, reaction_speeds, splitData)
+        start, cov, innov, innovCov = UKF_algorithm.UKF(start, cov, q, r, dt_ukf, gps_data, reaction_speeds, reaction_speeds, splitData)
+        # option to just visualize data
+        # start = np.concatenate((np.array([0]), splitData))
         simulator.game_visualize(np.array([start[:4]]), i)
 
         # continue to get data from file until empty
@@ -125,6 +132,7 @@ def run_ukf_textfile(start, cov, r, q, filename):
         if(data == ''):
             break
         splitData2 = [float(x) for x in data.split(",")]
+        # data is in the form of magnetic field (bx, by, zy) and angular velocity (wx, wy, wz)
         splitData = np.concatenate((splitData2[6:], splitData2[3:6]))
 
         i+=1
@@ -143,7 +151,9 @@ def run_ukf_sensor_iteration(state, cov, r, q, i):
     if check_zeros(data): 
         return "Error" 
 
-    state, cov = UKF_algorithm.UKF(state, cov, r, q, gps_data, data)
+    b_true = wmm.bfield_calc(gps_data)
+
+    state, cov, innov, innovCov = UKF_algorithm.UKF(state, cov, r, q, b_true, data)
     # Visualize only if needed
     # game_visualize(np.array([state[:4]]), i) 
 

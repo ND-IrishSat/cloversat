@@ -19,7 +19,7 @@ from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from ukf.PySOL.wmm import *
-from ukf.simulator import *
+from sim.visualizer import *
 from adc.adc_pd_controller_numpy import pd_controller
 from ukf.UKF_algorithm_1D import *
 import time
@@ -189,6 +189,8 @@ def main(target):
 
     # inialize starting speed because hall sensor is read at end of loop
     x_speed = 0
+
+    dt = .1
     
     print(line)
     print("STARTING TEST RUN.")
@@ -219,7 +221,7 @@ def main(target):
         data[2] = angular_vel[2]
 
         # Run UKF
-        state, cov = UKF(state, cov, q, r, B_true, reaction_speeds, old_reaction_speeds, data)
+        state, cov = UKF(state, cov, q, r, dt, B_true, reaction_speeds, old_reaction_speeds, data)
         print("*Current state: ({:.2f}, {:.2f})".format(state[0],state[1]))
 
         # convert our euler state to quaternion (and one in proper frame of reference of visualizer)
