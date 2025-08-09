@@ -27,11 +27,11 @@ def initialize_setup():
 
     return pca
 
-def cleanup(x = None):
+def cleanup(motor = None):
     # Bring the wheels to a stop
-    if x != None:
-        x.target = 0
-        x.changeSpeed()
+    if motor != None:
+        motor.target = 0
+        motor.changeSpeed()
 
     # Confirm it is done
     print("STATUS: done with script! ending...")

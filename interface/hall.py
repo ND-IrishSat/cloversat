@@ -35,9 +35,9 @@ def checkHall(sensor):
 	c = np.arange(10).reshape(-1,1)
 	model = LinearRegression().fit(c,t)
 	frequency = 1/model.coef_
-	speed += ((frequency[0] * 15) / MAX_RPM) * MAX_DUTY 
+	hall_speed += ((frequency[0] * 15) / MAX_RPM) * MAX_DUTY 
 	# Return the speed according to Hall sensor (duty cycles)
-	return speed
+	return hall_speed
 
 # example call
 # res = checkHall(hallList[0])

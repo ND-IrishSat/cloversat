@@ -16,8 +16,8 @@ import RPi.GPIO as GPIO
 import time
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from hall import checkHall
-from motorsandmags import mag
+#from hall import checkHall
+#from motorsandmags import mag
 import random
 
 
@@ -114,7 +114,7 @@ class Motor():
         self.count = 0
         self.M_switch = 0
         self.rate = 0
-        self.pca = None
+        self.pca = pca
         GPIO.setup(self.dirPin,GPIO.OUT)
         GPIO.setup(self.hallList[0],GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
         GPIO.setup(self.hallList[1],GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
@@ -137,27 +137,32 @@ class Motor():
 
     # Send output signal to actuators (& checks direction)
     def changeSpeed(self):
+        switch_timout = 2.75
         temp_target = self.target
         if self.target < 0 and self.lastSpeed > 0:
+            print("Switching to negative")
             self.target = 0
             self.setSpeed()
-            time.sleep(.75)
+            time.sleep(switch_timout)
 
             # reverses the dirPin output, causing negative spin
-            self.setDir(False)
+            self.setDir(True)
             self.target = temp_target
             self.setSpeed()
 
         elif self.target > 0 and self.lastSpeed < 0:
+            print("Switching to posotive")
             self.target = 0
             self.setSpeed()
-            time.sleep(.75)
+            time.sleep(switch_timout)
 
             # defines dirPin output = True as positive spin
-            self.setDir(True)
+            self.setDir(False)
             self.target = temp_target
             self.setSpeed()
         else:
+            self.setSpeed()
+            '''
             if abs(self.target) > .87 * MAX_DUTY:
                 self.count+=1
                 if self.count >= 10:
@@ -172,7 +177,7 @@ class Motor():
                     mag.magOff(1, self.pca)
             self.target -= 1 * self.rate # NOTE: M_switch doesn't exist?
             self.setSpeed()
-    
+    '''
 	
 
     # convert duty cycle to RPM
