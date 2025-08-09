@@ -445,7 +445,7 @@ class Simulator():
         # find the predicted next speed of our reaction wheels based on current speed, current, and external torque
         # Calculate angular acceleration: ω_dot = (motor torque - external torque - damping) / moment of inertia
         # TODO: should this be new or old current?
-        omega_w_dot = (KT*self.currents[i] + external_torque_on_wheel - BM*self.reaction_speeds[i])/JM
+        omega_w_dot = (KT*self.currents[i] - external_torque_on_wheel - BM*self.reaction_speeds[i])/JM
 
         # Simplified temperature model: temperature increases based on current squared, and has a linear cooling term
         temp_increase_rate = self.currents[i]**2 * THERMAL_RESISTANCE

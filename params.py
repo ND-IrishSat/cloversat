@@ -53,7 +53,7 @@ OUTPUT_DIR = "plotOutput"
 # =======  CONTROLS  =======================================
 
 # target orientation for if we're simulating controls
-TARGET = np.array([1.0, 0.0, 0.5, 0.0])
+TARGET = np.array([1.0, 0.0, 1.0, 0.0])
 
 # gains for our PID controller
 KP = MAX_PWM * 4.0e-8       # Proportional gain
