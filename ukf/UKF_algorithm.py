@@ -168,6 +168,30 @@ class TEST1EOMS():
 
         return new_state
 
+        # 1D version for testing:
+        '''
+        NOTE: This implementation uses simplified rotational dynamics, i.e. 2D dynamics
+        Simplifications: quaternion (4x1) -> psi (angle, +psi_dot points out of the page)
+                 w_sat (3x1) -> psi_dot
+            -written by juwan for 2024 banquet at 4 am the night before
+        # Grab moment of inertia about z axis
+        Izz = self.I_body[2, 2]
+
+        # Calculate psi_ddot, i.e. angular acceleration
+        psi_ddot = -(self.I_w_spin/Izz) * alpha_rw
+
+        # Propagate
+        new_psi = psi + psi_dot * dt
+        new_psi_dot = psi_dot + psi_ddot * dt
+
+        #print(new_psi)
+        #print(new_psi_dot)
+
+        new_state = np.array([new_psi, new_psi_dot])
+
+        return new_state
+        '''
+
 
 def generatePredMeans(eomsClass, sigmaPoints, w0, w1, dt, reaction_speeds, old_reaction_speeds, n):
     '''

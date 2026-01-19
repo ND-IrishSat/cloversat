@@ -23,8 +23,8 @@ def hfunc(state, Bfield):
 
     @params
         state: state estimate of system-quaternion, angular velocity, reaction wheel speed (1 x n)
-        Bfield: B field of state (1 x 3) in milliteslas???
-            used to be controls: gps and time data needed to calculate magnetic field with respect to the earth 
+        Bfield: B field of state (1 x 3) in microteslas???
+            used to be controls: gps and time data needed to calculate magnetic field with respect to the earth
             (latitude, longitude, height, time arrays)
             but now we calculate that separately
 
@@ -42,11 +42,24 @@ def hfunc(state, Bfield):
     # other elements of state have 1 to 1 conversion, so add back before returning
     return np.concatenate((np.matmul(rotationMatrix, Bfield).ravel(), np.array(state[4:])))
 
+    # For 1D use:
+    '''
+    # find angle in xy plane
+    psi = state[0] # rad
+    rotationMatrix = np.array([[np.cos(psi), -np.sin(psi)], [np.sin(psi), np.cos(psi)]])
+
+    # calculate measured B-field
+    #Btrue = np.array([Bx_true, By_true])
+    Bmeas = np.matmul(rotationMatrix, B_true)
+
+    return np.append(Bmeas, state[1])
+    '''
+
 
 def normalize(v):
     # normalizes the vector v (usuallly a quaternion)
     norm = np.linalg.norm(v)
-    if norm == 0: 
+    if norm == 0:
        return v
     return v / norm
 
@@ -54,13 +67,13 @@ def normalize(v):
 def quaternion_rotation_matrix(Q):
     '''
     Covert a quaternion into a full three-dimensional rotation matrix.
- 
+
     @params
-        Q: A 4 element array representing the quaternion (q0,q1,q2,q3) 
- 
+        Q: A 4 element array representing the quaternion (q0,q1,q2,q3)
+
     @returns
-        rot_matrix: A 3x3 element matrix representing the full 3D rotation matrix. 
-            This rotation matrix converts a point in the local reference 
+        rot_matrix: A 3x3 element matrix representing the full 3D rotation matrix.
+            This rotation matrix converts a point in the local reference
             frame to a point in the global reference frame.
     '''
     # Extract the values from Q
@@ -68,27 +81,27 @@ def quaternion_rotation_matrix(Q):
     q1 = Q[1]
     q2 = Q[2]
     q3 = Q[3]
-     
+
     # First row of the rotation matrix
     r00 = 2 * (q0 * q0 + q1 * q1) - 1
     r01 = 2 * (q1 * q2 - q0 * q3)
     r02 = 2 * (q1 * q3 + q0 * q2)
-     
+
     # Second row of the rotation matrix
     r10 = 2 * (q1 * q2 + q0 * q3)
     r11 = 2 * (q0 * q0 + q2 * q2) - 1
     r12 = 2 * (q2 * q3 - q0 * q1)
-     
+
     # Third row of the rotation matrix
     r20 = 2 * (q1 * q3 - q0 * q2)
     r21 = 2 * (q2 * q3 + q0 * q1)
     r22 = 2 * (q0 * q0 + q3 * q3) - 1
-     
+
     # 3x3 rotation matrix
     rot_matrix = np.array([[r00, r01, r02],
                            [r10, r11, r12],
                            [r20, r21, r22]])
-                            
+
     return rot_matrix
 
 
@@ -123,17 +136,51 @@ def euler_from_quaternion(w, x, y, z):
     t0 = +2.0 * (w * x + y * z)
     t1 = +1.0 - 2.0 * (x * x + y * y)
     roll_x = math.atan2(t0, t1)
-    
+
     t2 = +2.0 * (w * y - z * x)
     t2 = +1.0 if t2 > +1.0 else t2
     t2 = -1.0 if t2 < -1.0 else t2
     pitch_y = math.asin(t2)
-    
+
     t3 = +2.0 * (w * z + x * y)
     t4 = +1.0 - 2.0 * (y * y + z * z)
     yaw_z = math.atan2(t3, t4)
-    
+
     return roll_x, pitch_y, yaw_z # in radians
+
+
+def angle2quat(psi):
+    ''' Takes in angle psi (Euler angle about Z axis) and returns quaternion
+    '''
+
+    # Build rotation matrix (Z rotation matrix)
+    Rmat = np.array([[np.cos(psi), -np.sin(psi), 0],
+                     [np.sin(psi), np.cos(psi), 0],
+                     [0, 0, 1]])
+
+    # Grab components of rotation matrices
+    m00 = Rmat[0,0]
+    m01 = Rmat[0,1]
+    m02 = Rmat[0,2]
+    m10 = Rmat[1,0]
+    m11 = Rmat[1,1]
+    m12 = Rmat[1,2]
+    m20 = Rmat[2,0]
+    m21 = Rmat[2,1]
+    m22 = Rmat[2,2]
+
+    if m00 < -m11:
+        t = 1 - m00 - m11 + m22
+        quat = np.array([m20 + m02, m12 + m21, t, m01 - m10])
+    else:
+        t = 1 + m00 + m11 + m22
+        quat = np.array([m12 - m21, m20 - m02, m01 - m10, t])
+
+    quat = (0.5/np.sqrt(t)) * quat
+    quat = quat / np.linalg.norm(quat)
+    #quat[0] = 1
+
+    return quat
 
 
 if __name__ == '__main__':
@@ -177,7 +224,7 @@ if __name__ == '__main__':
     # state = np.random.rand(n)
     # transformed = np.array()
     # need some kind of generator for random long/lat coordinates, height, and time
-    #   arrays needed for controls: 
+    #   arrays needed for controls:
         # lat_gd (np.array): array holding the geodesic latitude associated with a state
         # lon (np.array): array holding the longtitude associated with a state
         # h_ellp (np.array): array holding the estimated heights above the ellipsoid in m
