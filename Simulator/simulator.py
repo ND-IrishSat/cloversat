@@ -88,13 +88,6 @@ class Simulator():
         self.reaction_speeds = np.zeros((self.n, 4))
         self.reaction_speeds[0] = RW_INITIAL
 
-        # get moment of inertia of body of satellite
-        I_body = CUBESAT_BODY_INERTIA
-        I_spin = SPIN_AXIS_INERTIA
-        I_trans = TRANSVERSE_AXIS_INERTIA
-        # intialize EOMs using intertia measurements of cubeSat
-        self.EOMS = TEST1EOMS(I_body, I_spin, I_trans)
-
         # data values for all n steps
         self.data = np.zeros((self.n, self.dim_mes))
 
@@ -254,12 +247,12 @@ class Simulator():
         Populates self.data (n x dim_mes) from either ideal states, live data, or data from a file
             Ideal states: Adds noise to the ideal states to mimic what our sensors would be giving us
             Live data: Reads data from our imu and reaction wheels
-            File: reads data from DATA_FILE if non-null
+            File: reads data from SENSOR_DATA_FILE if non-null
         '''
 
         # if we're not using ideal states and we have a data file, load data from file
-        if not self.ideal_known and DATA_FILE != None:
-            self.loadData(DATA_FILE)
+        if not self.ideal_known and SENSOR_DATA_FILE != None:
+            self.loadData(SENSOR_DATA_FILE)
         else:
             # if we're not using a file, populate data array from correct source
             for i in range(self.n):
@@ -268,7 +261,7 @@ class Simulator():
                     # generate fake data
                     self.generateData_step(i)
 
-                elif DATA_FILE == None:
+                elif SENSOR_DATA_FILE == None:
                     # if no data file is specified, read from our sensors
                     self.liveData_step(i)
 
@@ -459,7 +452,7 @@ class Simulator():
 
         # update our variables with Euler's method of propagation
         # self.currents[i] = self.currents[i-1] + current_dot * self.dt
-        self.currents[i] = np.clip(self.currents[i], MIN_CURRENT, MAX_CURRENT)
+        self.currents[i] = np.clip(self.currents[i], MIN_CURRENT_RW, MAX_CURRENT_RW)
         # self.Th_Ta += Th_Ta_dot * self.dt
         # self.Tw_Ta += Tw_ta_dot * self.dt
         next_speeds = self.reaction_speeds[i] + omega_w_dot * self.dt
@@ -516,11 +509,11 @@ class Simulator():
     def run_filter_sim(self):
         '''
         Generates ideal states and sensor data, allowing us to benchmark our kalman filter against simulated "truth".
-        Can also be run with pre-existing sensor data (ideal_known = False and DATA_FILE != None)
+        Can also be run with pre-existing sensor data (ideal_known = False and SENSOR_DATA_FILE != None)
         '''
 
         # text file with data values
-        dataFile = DATA_FILE
+        dataFile = SENSOR_DATA_FILE
 
         if self.ideal_known:
             # decide how we want our reaction wheels to spin at each time step
@@ -566,8 +559,8 @@ class Simulator():
         plotState_xyz(self.filtered_states, False)
         # unpack the filtered quaternion and convert it to euler angles
         # use the error quaternion between our starting state and current state to base angle off of starting point
-        plotAngles(np.array([euler_from_quaternion(*delta_q(a[:4], QUAT_INITIAL)) for a in self.filtered_states]), "Euler angles", fileName="Euler.png")
-        # plotAngles(np.array([euler_from_quaternion(*a[:4]) for a in self.filtered_states]), "Euler angles", fileName="Euler.png")
+        plotAngles(np.array([quaternion_to_euler(*delta_q(a[:4], QUAT_INITIAL)) for a in self.filtered_states]), "Euler angles", fileName="Euler.png")
+        # plotAngles(np.array([quaternion_to_euler(*a[:4]) for a in self.filtered_states]), "Euler angles", fileName="Euler.png")
 
 
     def plotWheelInfo(self):
