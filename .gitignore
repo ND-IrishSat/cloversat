@@ -16,6 +16,7 @@ __pycache__
 Maya_project/Irishsat_Simulator/images/
 Maya_project/Irishsat_Simulator/cache/
 Maya_project/Irishsat_Simulator/autosave/
+Controls/Pointing/
 .mayaSwatches/
 *.swatches
 *.log
