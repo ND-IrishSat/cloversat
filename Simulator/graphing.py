@@ -15,10 +15,13 @@ from matplotlib import cm
 import matplotlib
 from mpl_toolkits.mplot3d import Axes3D
 from saving import *
+# import params module from parent directory
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+from params import *
 
 
-def plot_multiple_lines(data, labels, title, x=0, y=0, text="", fileName="default.png"):
-    ''' 
+def plot_multiple_lines(data, labels, title, x=0, y=0, text="", fileName="default.png", ylabel=""):
+    '''
     plots multiple lines on the same graph
     stores plot as a png file in the plotOutput (global var in saving.py) directory
     note: does not call plt.show()
@@ -30,13 +33,30 @@ def plot_multiple_lines(data, labels, title, x=0, y=0, text="", fileName="defaul
         x, y: pixel location on screen
         text: sentence to go on bottom of graph
         fileName: name of png file to save graph as
+        ylabel: (optional) label for y axis
     '''
     # Create a figure and axes
     fig, ax = plt.subplots()
 
+    # convert i to hours based on timestep
+    # time_points = [(i * DT / 3600) for i in range(len(data[0]))]
+    time_points = TIME_GRAPHING_ARRAY
+
     # Plot each line.
     for i, line in enumerate(data):
-        ax.plot(line, label=labels[i])
+        ax.plot(time_points, line, label=labels[i])
+
+    # Switch x-axis units to hours (based on timestep)
+    # x_ticks = ax.get_xticks()
+    # find new ticks based on final time TF and DT
+    # new_ticks = [round((x_tick * DT) / 3600, 2) for x_tick in x_ticks]
+    # ax.set_xticklabels(new_ticks)
+
+    # Add "hours" label to x axis
+    ax.set_xlabel("Time (hours)")
+
+    if ylabel != "":
+        ax.set_ylabel(ylabel)
 
     # Add a legend
     ax.legend()
@@ -58,9 +78,9 @@ def plot_multiple_lines(data, labels, title, x=0, y=0, text="", fileName="defaul
 
 
 def move_figure(f, x=0, y=0):
-    ''' 
+    '''
     move figure's upper left corner to pixel (x, y)
-    
+
     @params:
         f: figure object returned by calling pt.subplot
         x, y: coordinates to move to
@@ -76,8 +96,8 @@ def move_figure(f, x=0, y=0):
         # f.canvas.manager.window.move(x, y)
 
 
-def plot_xyz(data, title, x=0, y=0, fileName="default.png"):
-    ''' 
+def plot_xyz(data, title, x=0, y=0, fileName="default.png", ylabel=""):
+    '''
     given an arbitrary numpy 2D list (where every element contains x, y, z or a quaternion a, b, c, d), plot them on a 2D graph
 
     @params:
@@ -85,6 +105,7 @@ def plot_xyz(data, title, x=0, y=0, fileName="default.png"):
         title: graph title
         x, y: coordinates for graph on screen
         fileName: name of png file to save graph as
+        ylabel: (optional) label for y axis
     '''
 
     newData = data.transpose()
@@ -94,7 +115,7 @@ def plot_xyz(data, title, x=0, y=0, fileName="default.png"):
         plot_multiple_lines(newData, ["a", "b", "c", "d"], title, x, y, fileName=fileName)
     else:
         # plot xyz
-        plot_multiple_lines(newData, ["x", "y", "z"], title, x, y, fileName=fileName)
+        plot_multiple_lines(newData, ["x", "y", "z"], title, x, y, fileName=fileName, ylabel=ylabel)
 
 
 def plotAngles(data, title, fileName="default.png"):
@@ -114,7 +135,7 @@ def plotAngles(data, title, fileName="default.png"):
 
     # Plot each line.
     for i, line in enumerate(data):
-        ax.plot(line, label=labels[i])
+        ax.plot(TIME_GRAPHING_ARRAY, line, label=labels[i])
 
     # Add a legend
     ax.legend()
@@ -130,38 +151,36 @@ def plotAngles(data, title, fileName="default.png"):
     # Apply the custom ticks
     plt.yticks(pi_ticks, pi_labels)
 
+    plt.ylabel("Radians")
+
     plt.title(title)
 
     # save the figure as a png using saving.py
     saveFig(fig, fileName)
 
 
-def plotState_xyz(data, ideal=False):
+def plotState_xyz(data, filtered=False):
     '''
     plots IrishSat's 7 dimensional state (quaternion and angular velocity)
     creates 2 graphs that show quaternion and angular velocity for all time steps
 
     @params:
         data: 2D array of states to be graphed
-        ideal: boolean value that signifies where to place graphs
+        filtered: boolean value that signifies where to place graphs
             true = top left, false = bottom middle
     '''
 
     # separate quaternion and angular velocity from data array
-    quaternions = np.array([data[0][:4]])
-    velocities = np.array([data[0][4:]])
+    quaternions = np.array(data[:, :4])
+    velocities = np.array(data[:, 4:])
 
-    for i in range(1, len(data)):
-        quaternions = np.append(quaternions, np.array([data[i][:4]]), axis=0)
-        velocities = np.append(velocities, np.array([data[i][4:]]), axis=0)
-
-    if ideal:
+    if filtered:
         # plot two graphs in top left
-        plot_xyz(velocities, "Ideal Angular Velocity", 50, 0, fileName="idealVelocity.png")
-        plot_xyz(quaternions, "Ideal Quaternion", 0, 0, fileName="idealQuaternion.png")
-    else:
         plot_xyz(velocities, "Filtered Angular Velocity", 575, 370, fileName="filteredVelocity.png")
         plot_xyz(quaternions, "Filtered Quaternion", 525, 370, fileName="filteredQuaternion.png")
+    else:
+        plot_xyz(velocities, "Angular Velocity", 575, 370, fileName="Velocity.png", ylabel="Angular Velocity (rad/s)")
+        plot_xyz(quaternions, "Quaternion", 525, 370, fileName="Quaternion.png")
 
 
 def plotData_xyz(data):
@@ -174,28 +193,24 @@ def plotData_xyz(data):
     '''
 
     # separate magnetometer and gyroscope data
-    magData = np.array([data[0][:3]])
-    gyroData = np.array([data[0][3:]])
+    magData = np.array(data[:, :3])
+    gyroData = np.array(data[:, 3:])
 
-    for i in range(1, len(data)):
-        magData = np.append(magData, np.array([data[i][:3]]), axis=0)
-        gyroData = np.append(gyroData, np.array([data[i][3:]]), axis=0)
+    plot_xyz(gyroData, "Gyroscope Data", 1100, 0, fileName="gyroData.png", ylabel="Angular Velocity (rad/s)")
+    plot_xyz(magData, "Magnetometer Data (Body Frame)", 1050, 0, fileName="magData.png", ylabel="Magnetic Field (microteslas)")
 
-    plot_xyz(gyroData, "Gyroscope Data", 1100, 0, fileName="gyroData.png")
-    plot_xyz(magData, "Magnetometer Data", 1050, 0, fileName="magData.png")
 
-    
 def plot3DVectors(vectors, plotSegment=111):
     '''
     plots 3D vectors
     note: does not call plt.show()
-    
+
     @params:
         vectors: list of 3D vectors to plot
         plotSegment (optional): 3 digit number 'nmi'
             split plot into n by m plots and picks ith one
             ex: 121 splits into 1 row, 2 columns and picks the first (the left half)
-    '''  
+    '''
 
     # set bounds of graph
     bounds = [-1.5, 1.5]
@@ -252,7 +267,7 @@ def plotData3D(data, numVectors, plotSegment=111):
     # take numVector elements of data to be printed
     for i in range(1, numVectors):
         result = np.append(result, np.array([data[i*section][:3]]), axis=0)
-    
+
     # print(result)
 
     # plot3DVectors(np.array([ukf.B_true, data[50][:3], data[100][:3], data[150][:3]]), 121)

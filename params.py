@@ -41,6 +41,7 @@ MAG_CURRENT_INITIAL = np.array([0.0, 0.0, 0.0])
 MAG_VOLTAGE_INITIAL = np.array([0.0, 0.0, 0.0])
 RW_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
 STARTING_PROTOCOL = "point" # "detumble", "point", "target_point"
+PROTOCOL_MAP = {"demagnetize": -2, "detumble": -1, "point": 0, "target_point": 1}
 
 # ============  ORBITAL DYNAMICS  ==================================================
 
@@ -119,6 +120,8 @@ assert(MAG_READING_INTERVAL <= np.pi / (2 * (MAG_READING_INTERVAL - TORQUER_OFF_
 # How often to run our controls loop (seconds)
 NADIR_INTERVAL = 2.0
 
+# Whether to run our unscented kalman filter or not
+RUN_UKF = False
 # for simple 1D testbed validation (with a suboption for detumble)
 RUNNING_1D = False
 # whether you're running in Debart with 3D rendering (check 3D settings at bottom if so)
@@ -145,10 +148,11 @@ if not IDEAL_KNOWN:
     # if SENSOR_DATA_FILE is None, we are using live data from the sensors
     SENSOR_DATA_FILE = "data.txt"
 
-# should be true if not doing controls
-RUN_STATISTICAL_TESTS = False
 
 # =======  UKF  =================================================
+
+# should be true if not doing controls
+RUN_STATISTICAL_TESTS = False
 
 COVARIANCE_INITIAL_MAG = 5e-7
 

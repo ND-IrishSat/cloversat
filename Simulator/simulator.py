@@ -516,7 +516,7 @@ class Simulator():
             # this simulates demagnitizing the magnetorquer core (theoritically)
             if np.linalg.norm(self.voltages[i - 1]) > 0:
                 self.voltages[i] = np.array([- DEMAGNITIZING_VOLTAGE * (v / abs(v)) for v in self.voltages[i - 1]])
-            self.mode[i] = -2
+            self.mode[i] = PROTOCOL_MAP['demagnetize']
             self.errorQuats[i] = self.errorQuats[i - 1]
             self.nadirError[i] = self.nadirError[i - 1]
 
@@ -524,7 +524,7 @@ class Simulator():
 
             # if torquers are off as they demagnitize, set voltage to 0
             self.voltages[i] = np.zeros((3))
-            self.mode[i] = -2
+            self.mode[i] = PROTOCOL_MAP['demagnetize']
             self.errorQuats[i] = self.errorQuats[i - 1]
             self.nadirError[i] = self.nadirError[i - 1]
 
@@ -532,8 +532,8 @@ class Simulator():
 
             # for 1D test, use simple custom controller
             self.voltages[i] = maxPowerController(DESIRED_MAGNETIC_MOMENTS, self.mag_sat)
-            self.voltages[i] = np.clip(self.voltages[i], -MAX_VOLTAGE, MAX_VOLTAGE)
-            self.mode[i] = -1
+            self.voltages[i] = np.clip(self.voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
+            self.mode[i] = PROTOCOL_MAP['detumble']
 
         elif self.mag_sat.state == "detumble":
 
@@ -541,8 +541,8 @@ class Simulator():
             if GYRO_WORKING or len(self.mag_sat.prevB) >= MAG_READINGS_STORED:
                 # oppose angular velocity
                 self.voltages[i] = B_dot(self.mag_sat)
-                self.voltages[i] = np.clip(self.voltages[i], -MAX_VOLTAGE, MAX_VOLTAGE)
-            self.mode[i] = -1
+                self.voltages[i] = np.clip(self.voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
+            self.mode[i] = PROTOCOL_MAP['detumble']
 
         # elif self.mag_sat.state == "search":
 
@@ -564,9 +564,9 @@ class Simulator():
                     self.nadirError[i] = np.linalg.norm(self.errorQuats[i][1:])
 
                 self.voltages[i] = nadir_point(self.errorQuats[i], self.mag_sat)
-                self.mode[i] = 0
+                self.mode[i] = PROTOCOL_MAP['point']
                 # We still clamp voltages on firmware
-                self.voltages[i] = np.clip(self.voltages[i], -MAX_VOLTAGE, MAX_VOLTAGE)
+                self.voltages[i] = np.clip(self.voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
             else:
                 # If we don't have a new image, don't bother running controls loop
                 self.voltages[i] = self.voltages[i - 1]
@@ -582,7 +582,8 @@ class Simulator():
             omega = np.array(self.filtered_states[i][4:])
 
             # Run PD controller to generate output for reaction wheels based on target orientation
-            self.pwms[i] = self.controller.pid_controller(quaternion, target, omega, self.pwms[i-1])
+            self.pwms[i] = self.controller.pid_controller(quaternion, TARGET, omega, self.pwms[i-1])
+            self.mode[i] = PROTOCOL_MAP['target_point']
 
         # Clamp with bitmask
         self.pwms[i] *= RW_AXES
@@ -893,7 +894,7 @@ class Simulator():
         plotAngles(np.array([quaternion_to_euler(*delta_q(a[:4], QUAT_INITIAL)) for a in self.states]), "Euler angles", fileName="Euler.png")
         # plotAngles(np.array([quaternion_to_euler(*a[:4]) for a in self.filtered_states]), "Euler angles", fileName="Euler.png")
 
-        plotState_xyz(self.filtered_states, False)
+        plotState_xyz(self.filtered_states, True)
 
 
     def plotWheelInfo(self):
@@ -909,16 +910,16 @@ class Simulator():
         plot_xyz(self.pwms, "PWMs", fileName="PWM.png")
 
         # simulated current to our 4 wheels
-        plot_multiple_lines([self.rw_currents], ["Motor Current"], "Motor Current", fileName="Current.png")
+        plot_multiple_lines([self.rw_currents], ["Motor Current"], "Motor Current", fileName="ReactionCurrent.png")
 
 
     def plotMagInfo(self):
         '''
         Plots the currents and torque created by our magnetorquers
         '''
-        plot_xyz(self.voltages, "Voltages", fileName="Voltages.png", ylabel="Voltage (Volts)")
-        plot_xyz(self.currents, "Currents", fileName="Currents.png", ylabel="Current (Amps)")
-        plot_xyz(self.torques, "Torques", fileName="Torques.png", ylabel="Torque (N*m)")
+        plot_xyz(self.voltages, "Mag Voltages", fileName="MagVoltages.png", ylabel="Voltage (Volts)")
+        plot_xyz(self.currents, "Mag Currents", fileName="MagCurrents.png", ylabel="Current (Amps)")
+        plot_xyz(self.torques, "Mag Torques", fileName="MagTorques.png", ylabel="Torque (N*m)")
         plot_xyz(self.power_output, "Power Usage", fileName="Power_Output.png", ylabel="Power (Watts)")
         # plot_multiple_lines([self.totalPower],["Total Power"], "Total Power Output",fileName="Total_Power_Output.png",ylabel="Power (Watts)")
 
