@@ -290,10 +290,101 @@ class Simulator():
         return np.concatenate((quat, velocity))
 
 
+    def generateData_step(self, state, i):
+        '''
+        Generates fake data for a single time step and populates self.data[i], self.B_body[i]
+            Sets mag_sat.B_body and mag_sat.w_sat to simulated sensor readings
+        Adds noise to the states to mimic what our sensors would be giving us
+
+        @returns:
+            data: array of sensor fake data (1 x dim_mes)
+        '''
+        data = np.zeros(self.dim_mes)
+
+        if ACCURATE_MAG_READINGS and (self.magnetometerReadingTimer * self.dt < MAG_READING_INTERVAL):
+            # if it hasn't been long enough since last reading, take last reading as an estimate
+            data[:3] = self.data[i - 1][:3]
+            self.B_body[i] = self.B_body[i - 1]
+
+            # keep the mag_sat reading to be the same, and update prev value to be the same
+            # self.mag_sat.prevB.append(self.mag_sat.B_body)
+            # if (len(self.mag_sat.prevB) > 2):
+                # self.mag_sat.prevB.pop(0)
+        else:
+
+            # calculate sensor b field for current time step (see h func for more info on state to measurement space conversion)
+            # use current B field of earth to transform state to measurement space + add noise
+            # rotation matrix(q) * true B field + noise (in microteslas)
+            self.B_body[i] = np.matmul(quaternion_rotation_matrix(state[:4]), self.B_earth[i]) + self.magNoises[i]
+
+            # Set the previous B field to current B field before future B field is calculated
+            # Only set previous B field when step is greater than 0 (edge case)
+            if i > 0:
+                # self.mag_sat.prevB = self.mag_sat.B_body
+                self.mag_sat.prevB.append(self.mag_sat.B_body)
+                if (len(self.mag_sat.prevB) > MAG_READINGS_STORED):
+                    self.mag_sat.prevB.pop(0)
+
+            # store new reading in our sat object
+            self.mag_sat.B_body = self.B_body[i].astype(np.float64)
+
+            # convert from microteslas to teslas
+            self.mag_sat.B_body = np.array([self.mag_sat.B_body[0] * 1e-6, self.mag_sat.B_body[1] * 1e-6, self.mag_sat.B_body[2] * 1e-6])
+
+            data[:3] = self.B_body[i]
+
+        # get predicted speed of this state + noise (in rad/s) to mimic gyro reading
+        data[3] = state[4] + self.gyroNoises[i][0]
+        data[4] = state[5] + self.gyroNoises[i][1]
+        data[5] = state[6] + self.gyroNoises[i][2]
+        # set the angular velocity reading of the satellite
+        self.mag_sat.w_sat = np.array([data[3], data[4], data[5]])
+
+        # store in data array
+        self.data[i] = data
+
+        return data
+
+
+    def loadData(self, fileName):
+        '''
+        Loads pre-made data from a txt file, used when ideal_known = False
+        Populates self.data with sensor data from file
+        Populates self.rw_speeds with reaction wheel speeds from file
+
+        @params:
+            fileName: name of file to load data from
+        '''
+        try:
+            # data is in the format a, b, c, x, y, z, e, f, g
+            # a, b, c are magnetic field in state space readings, x, y, z are angular velocity, e, f, g are reaction wheel speeds
+            # each line is a new time step
+            # read in file line by line and store data and reaction wheel speeds in self.data and self.rw_speeds
+            data = []
+            speeds = []
+            with open(fileName, 'r') as file:
+                for line in file:
+                    data.append(np.array([float(x) for x in line.split(",")[:6]]))
+                    speeds.append(np.array([float(x) for x in line.split(",")[6:]]))
+
+            self.data = np.array(data)
+            self.rw_speeds = np.array(speeds)
+            return data
+
+        except FileNotFoundError:
+            print(f"Error: Data file {fileName} not found")
+            return 1
+        except Exception as e:
+            print(f"Error loading data: {e}")
+            return 1
+
+
     def determine_attitude(self, i):
         '''
         Use Kalman filter to determine current attitude based on last state and sensor readings
-        Fills self.filtered_states[i]??
+        Populates self.filtered_states[i]
+
+        TODO: check i indices (where in the process is this done)
         '''
         start = time.time()
 
@@ -307,6 +398,110 @@ class Simulator():
 
         end = time.time()
         self.times[i] = end - start
+
+
+    def check_state(self, i):
+        '''
+        Checks current state of our mag_sat and updates if requirements are met
+            Must check self.states[i - 1] because current state is not updated yet
+        If detumbling, check threshold speed
+        If searching, check if horizon is found
+        If pointing, check if horizon is lost
+            Also always check if speed is too high??
+
+        For accurate mag readings, also handles all timers (torquersOffTimer, magnetometerReadingTimer)
+
+        '''
+
+        if ACCURATE_MAG_READINGS:
+
+            if self.torquersOffTimer * self.dt >= TORQUER_OFF_TIME and self.magnetometerReadingTimer * self.dt >= MAG_READING_INTERVAL:
+                # if torquers have been off for a while and we took our reading (in generateData_step), reset timers
+                # print(i, " reading took: ", self.magnetometerReadingTimer * self.dt, ", ", self.torquersOffTimer * self.dt)
+                self.magnetometerReadingTimer = 0.0
+                self.torquersOffTimer = 0.0
+
+            elif self.magnetometerReadingTimer * self.dt >= MAG_READING_INTERVAL - TORQUER_OFF_TIME:
+                # if we're approaching a magnetometer reading, start updating the torquer off timer
+                # print(i, " mags off", self.magnetometerReadingTimer * self.dt, ", ", self.torquersOffTimer * self.dt)
+                self.torquersOffTimer += 1.0
+                self.magnetometerReadingTimer += 1.0
+            else:
+                # otherwise, update time since we've taken reading
+                # print(i, " mags on", self.magnetometerReadingTimer * self.dt, ", ", self.torquersOffTimer * self.dt)
+                self.magnetometerReadingTimer += 1.0
+
+        if RUNNING_1D and not DETUMBLE_1D:
+            # extract current quaternion and convert to euler angles
+            q = self.states[i - 1][:4]
+            x, y, z = quaternion_to_euler(q)
+
+            # check if we've reached our desired angle for the first time
+            if (self.finishedTime == -1):
+                if (x<=DESIRED_ANGLE[0]):
+                    print("REACHED DESIRED ANGLE OF 90")
+                    self.finishedTime = i*self.dt
+                    print("Time needed is " + str(self.finishedTime))
+
+        elif self.mag_sat.state == "detumble":
+            # threshold 0.5-1 degress per second per axis
+            thresholdLow = 0
+            if RUNNING_1D and DETUMBLE_1D:
+                thresholdHigh = DETUMBLE_THRESHOLD_1D
+            else:
+                thresholdHigh = DETUMBLE_THRESHOLD
+
+            angularX = abs(self.states[i - 1][4])
+            angularY = abs(self.states[i - 1][5])
+            angularZ = abs(self.states[i - 1][6])
+
+            if(self.finishedTime == -1) and i > 0:
+                if (thresholdLow <= angularX <= thresholdHigh) and (thresholdLow <= angularY <= thresholdHigh) and (thresholdLow <= angularZ <= thresholdHigh):
+                    print("Successfully detumbled after " + str(i*self.dt) + " seconds!")
+                    # record first time we hit "detumbled" threshold (seconds)
+                    self.finishedTime = i*self.dt
+
+                    # When the "detumbled" threshold is hit, calculate total Energy
+                    # Total Energy is calculated as a "Rieman Sum" of the total power used at each time step multiplied by the time step
+                    for step in range(i):
+                        self.energy = self.energy + self.totalPower[step]*self.dt
+
+                    # move to nadir pointing protocol
+                    return "point"
+
+            return "detumble"
+
+        # We didn't actually implement this state
+        # elif self.mag_sat.state == "search":
+        #     # if both see earth in some capacity (even if one if full), move to pointing
+        #     if RUNNING_MAYA and self.mag_sat.cam1.alpha >= 0.05 and self.mag_sat.cam2.alpha >= 0.05:
+        #         # print("SWITCH TO POINT")
+        #         return "point"
+        #     else:
+        #         # if we don't see the earth, check that we're below detumble threshold
+        #         thresholdLow = 0
+        #         thresholdHigh = DETUMBLE_THRESHOLD # 0.5-1 degress per second per axis
+        #         angularX = abs(self.states[i - 1][4])
+        #         angularY = abs(self.states[i - 1][5])
+        #         angularZ = abs(self.states[i - 1][6])
+        #         # if we're below threshold, move to pointing (for step 2 (AC) solving only)
+        #         if (thresholdLow <= angularX <= thresholdHigh) and (thresholdLow <= angularY <= thresholdHigh) and (thresholdLow <= angularZ <= thresholdHigh):
+        #             return "point"
+        #         else:
+        #             return "detumble"
+
+        elif self.mag_sat.state == "point":
+            return "point"
+            # # check if we lost horizon--move to search
+            # if RUNNING_MAYA and ((0.0 <= self.mag_sat.cam1.alpha <= 0.05) or (0.0 <= self.mag_sat.cam2.alpha <= 0.05)):
+            #     return "search"
+            # else:
+            #     return "point"
+        elif self.mag_sat.state == "target_point":
+            return "target_point"
+        else:
+            return "INVALID"
+
 
     def controls(self, i):
         '''
@@ -390,6 +585,9 @@ class Simulator():
             self.pwms[i] = self.controller.pid_controller(quaternion, target, omega, self.pwms[i-1])
 
         # Clamp with bitmask
+        self.pwms[i] *= RW_AXES
+        self.mag_voltages[i] *= MAG_AXES
+
 
     def propagate_step(self, i):
         '''
@@ -404,9 +602,6 @@ class Simulator():
         true_b_body = self.mag_sat.B_body - (self.magNoises[i] * 1e-6)
         # torque (N*m) generated by magnetorquers: cross-product of moment with magnetic field (of body? wrong)
         mag_torque = np.cross(moment, true_b_body)
-
-        if RUNNING_1D:
-            mag_torque = mag_torque*TABLE_MASK
 
         # power = Watts being used at this particular time
         # calculate power output of magnetorquers = current output * operational voltage
@@ -427,6 +622,15 @@ class Simulator():
         self.rw_currents[i] = rw_current_propagator(self.pwms[i], self.Tw_Ta, self.rw_speeds[i-1], self.rw_currents[i-1], self.dt)
         self.rw_speeds[i], self.Th_Ta, self.Tw_Ta = rw_speed_propagator(self.rw_speeds[i-1], self.rw_currents[i], self.Th_Ta, self.Tw_Ta, self.dt)
 
+        # Use bitmask to ensure that only desired hardware is turned on/simulated
+        self.mag_currents[i] *= MAG_AXES
+        self.torques[i] *= FREEDOM_OF_MOVEMENT_AXES
+        self.rw_currents[i] *= RW_AXES
+        self.rw_speeds[i] *= RW_AXES
+        # Control signals are clamped in .controls()
+        # self.mag_voltages[i] *= MAG_AXES
+        # self.pwms[i] *= RW_AXES
+
         # calculate reaction wheel acceleration
         alpha = (self.rw_speeds[i] - self.rw_speeds[i-1]) / self.dt
 
@@ -442,117 +646,10 @@ class Simulator():
         elif SOLVER_METHOD == "rk4":
             quaternion_new, w_sat_new = rk4(self.states[i-1], self.rw_speeds[i], alpha, self.torques[i], self.dt, self.mag_sat.I_body)
 
-        # Use bitmask to ensure that only desired hardware is turned on
-
-        # Make filter_step
-
-        # Move sim_step to here (update rw's based off output in pwm from .controls)
-
-        # state = "target point"
-
         self.states[i] = np.concatenate((quaternion_new, w_sat_new))
         self.currents[i] = mag_currents
 
         return self.states[i]
-
-
-    def populateData(self):
-        '''
-        Populates self.data (n x dim_mes) from either ideal states, live data, or data from a file
-            Ideal states: Adds noise to the ideal states to mimic what our sensors would be giving us
-            Live data: Reads data from our imu and reaction wheels
-            File: reads data from SENSOR_DATA_FILE if non-null
-        '''
-
-        # if we're not using ideal states and we have a data file, load data from file
-        if not IDEAL_KNOWN and SENSOR_DATA_FILE != None:
-            self.loadData(SENSOR_DATA_FILE)
-        else:
-            # if we're not using a file, populate data array from correct source
-            for i in range(self.n):
-
-                if IDEAL_KNOWN:
-                    # generate fake data
-                    self.generateData_step(i)
-
-                elif SENSOR_DATA_FILE == None:
-                    # if no data file is specified, read from our sensors
-                    self.liveData_step(i)
-
-        return self.data
-
-
-    def generateData_step(self, i):
-        '''
-        Generates fake data for a single time step and populates self.data[i]
-        Adds noise to the ideal states to mimic what our sensors would be giving us
-
-        @returns:
-            data: array of sensor fake data (1 x dim_mes)
-        '''
-
-        data = np.zeros(self.dim_mes)
-
-        # calculate sensor b field for current time step (see h func for more info on state to measurement space conversion)
-        # use current B field of earth to transform ideal state to measurement space + add noise
-        # rotation matrix(q) * true B field + noise
-        B_sens = np.array([np.matmul(quaternion_rotation_matrix(self.states[i]), self.B_true[i])]) + self.magNoises[i]
-
-        data[:3] = B_sens
-
-        # get predicted speed of this state + noise to mimic gyro reading
-        data[3] = self.states[i][4] + self.gyroNoises[i][0]
-        data[4] = self.states[i][5] + self.gyroNoises[i][1]
-        data[5] = self.states[i][6] + self.gyroNoises[i][2]
-
-        # store in data array
-        self.data[i] = data
-
-        return data
-
-
-    def liveData_step(self, i):
-        '''
-        Reads one iteration of our sensors and stores in self.data[i]
-        Returns magnetometer, gyroscope reading
-        Populates self.rw_speeds[i] with hall sensor reading
-        '''
-
-        # TODO: import interface libraries
-        pass
-
-
-    def loadData(self, fileName):
-        '''
-        Loads pre-made data from a txt file, used when ideal_known = False
-        Populates self.data with sensor data from file
-        Populates self.rw_speeds with reaction wheel speeds from file
-
-        @params:
-            fileName: name of file to load data from
-        '''
-        try:
-            # data is in the format a, b, c, x, y, z, e, f, g
-            # a, b, c are magnetic field in state space readings, x, y, z are angular velocity, e, f, g are reaction wheel speeds
-            # each line is a new time step
-            # read in file line by line and store data and reaction wheel speeds in self.data and self.rw_speeds
-            data = []
-            speeds = []
-            with open(fileName, 'r') as file:
-                for line in file:
-                    data.append(np.array([float(x) for x in line.split(",")[:6]]))
-                    speeds.append(np.array([float(x) for x in line.split(",")[6:]]))
-
-            self.data = np.array(data)
-            self.rw_speeds = np.array(speeds)
-            return data
-
-        except FileNotFoundError:
-            print(f"Error: Data file {fileName} not found")
-            return 1
-        except Exception as e:
-            print(f"Error loading data: {e}")
-            return 1
 
 
     def simulate(self):
@@ -590,97 +687,6 @@ class Simulator():
 
         self.filtered_states = states
         return states
-
-
-    def simulate_step(self, i, target):
-        '''
-        Runs one iteration of propogation for our controls simulation
-        Finds the next state (self.filtered_states[i]), then generates uses our PID controller to find how our system wants to move
-            From the PWM signal output, simulate how our reaction wheel motors would respond for next step (updates self.rw_speeds[i+1])
-        '''
-
-        start = time.time()
-
-        # run last state, reaction wheel speed, and data through filter to get a more accurate state estimate
-        self.filtered_states[i], self.covs[i], self.innovations[i], self.innovationCovs[i] = self.kalmanMethod(
-                self.filtered_states[i-1], self.covs[i-1],         # last state and covariance
-                self.Q, self.R, self.dt,                           # process and measurement noise, dt
-                self.B_true[i],                                    # true magnetic field at this timestep
-                self.rw_speeds[i], self.rw_speeds[i-1],# current and last reaction wheel speeds
-                self.data[i])                                      # data reading at this timestep (already generated/filled)
-
-        end = time.time()
-        self.times[i] = end - start
-
-        # run state through our control script to get pwm signals for motors
-
-        # Get current quaternion and angular velocity of cubesat
-        quaternion = np.array(self.filtered_states[i][:4])
-        omega = np.array(self.filtered_states[i][4:])
-
-        # Run PD controller to generate output for reaction wheels based on target orientation
-        self.pwms[i] = self.controller.pid_controller(quaternion, target, omega, self.pwms[i-1])
-
-        # print("wheel speed: ", self.rw_speeds[i])
-        # print("PWM: ", self.pwms[i])
-        # print("old current: ", self.rw_currents[i-1])
-
-        # update our temperature and current variables
-        # TODO: find and enforce limits for current and temp (that match with max pwm)
-
-        # convert from pwm to voltage
-        voltage = (9/MAX_PWM) * self.pwms[i]
-        # find the updated winding resistance based on ambient * our current temp
-        Rw = RWA *(1 + ALPHA_CU * self.Tw_Ta)
-
-        # update our current and ambient temperature difference variables
-        # magic = 1
-        # current_dot = (voltage - self.rw_currents[i-1]*Rw - KV*self.rw_speeds[i])/LW * magic
-        # i_dot = (Vin - i*Rw - KV*omega_w)/LW
-        # Th_Ta_dot = ((self.Th_Ta - self.Tw_Ta)/Rwh - self.Th_Ta/Rha)/Cha
-        # Tw_ta_dot = (self.rw_currents[i-1]**2*Rw - (self.Th_Ta - self.Tw_Ta)/Rwh)/Cwa
-
-        # print("current_dot: ", current_dot)
-        # print("speed_dot: ", omega_w_dot)
-
-        # Simplified current calculation based on voltage and reaction wheel speed
-        self.rw_currents[i] = self.rw_currents[i-1] + ((voltage - KV * self.rw_speeds[i]) / Rw) * self.dt
-
-        # external torque is 0 for now
-        external_torque_on_wheel = RW_EXTERNAL_TORQUE
-
-        # find the predicted next speed of our reaction wheels based on current speed, current, and external torque
-        # Calculate angular acceleration: ω_dot = (motor torque - external torque - damping) / moment of inertia
-        # TODO: should this be new or old current?
-        omega_w_dot = (KT*self.rw_currents[i] - external_torque_on_wheel - BM*self.rw_speeds[i])/JM
-
-        # Simplified temperature model: temperature increases based on current squared, and has a linear cooling term
-        temp_increase_rate = self.rw_currents[i]**2 * THERMAL_RESISTANCE
-        temp_cooling_rate = COOLING_CONSTANT * (self.Th_Ta - self.Tw_Ta)
-
-        # Update temperature variables
-        self.Th_Ta += (temp_increase_rate - temp_cooling_rate) * self.dt
-
-        # Assume the reaction wheel temperature adjusts similarly, with some coupling to the ambient temperature
-        self.Tw_Ta += (temp_increase_rate * WHEEL_COUPLING_FACTOR - temp_cooling_rate) * self.dt
-
-        # update our variables with Euler's method of propagation
-        # self.rw_currents[i] = self.rw_currents[i-1] + current_dot * self.dt
-        self.rw_currents[i] = np.clip(self.rw_currents[i], MIN_CURRENT_RW, MAX_CURRENT_RW)
-        # self.Th_Ta += Th_Ta_dot * self.dt
-        # self.Tw_Ta += Tw_ta_dot * self.dt
-        next_speeds = self.rw_speeds[i] + omega_w_dot * self.dt
-
-        # print("current: ", self.rw_currents[i])
-
-        # print("next speeds: ", next_speeds)
-        # print("")
-
-        # update the next reaction wheel speed with our predicted rpm
-        if i < self.n - 1:
-            self.rw_speeds[i + 1] = next_speeds
-
-        return self.filtered_states[i]
 
 
     def run_controls_sim(self):
@@ -754,27 +760,140 @@ class Simulator():
         self.plot_and_viz_results(sum=sum)
 
 
+    def findTrueNadir(self, ideal, gps, i):
+        '''
+        Given the current (estimated) state, find error quaternion between the current orientation and nadir
+        Stores error quaternion in self.trueErrorQuats[i]
+        Stores magnitude of x,y,z component of error quaternion in self.trueNadirError[i]
+
+        @params:
+            ideal (1x7 np.array): The current state of the satellite (quaternion and angular velocity)
+            gps (1x3 np.array): The GPS position of the satellite in ECEF coordinates [X, Y, Z] in meters
+
+        @returns:
+            nadir_body (1x3 np.array): The Earth-pointing vector in the satellite's body frame (unit vector).
+            error_quat (1x4 np.array): rotation quaternion from current orientation to nadir (w x y z)
+        '''
+
+        # ECEF gps points towards satellite in earth body frame
+        nadir_ecef = -gps / np.linalg.norm(gps)
+
+        # convert current orientation to rotation matrix (we use the form w,x,y,z)
+        rotation = R.from_quat([ideal[1], ideal[2], ideal[3], ideal[0]])
+
+        # convert from ECEF to the satellite's body frame
+        nadir_body = rotation.inv().apply(nadir_ecef)
+
+        # target nadir in body frame
+        # -z is down for our satellite
+        nadir_target = np.array(BODY_DOWN)
+
+        error_quat = np.zeros((4))
+
+        # find the error quaternion between the target nadir and the current nadir
+        # this finds shortest arc (https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another/1171995#1171995)
+        # Doesn't handle parallel vectors
+        error_quat[1:] = np.cross(nadir_body, nadir_target)
+        error_quat[0] = math.sqrt((np.linalg.norm(nadir_body) ** 2) * (np.linalg.norm(nadir_target) ** 2)) + np.dot(nadir_body, nadir_target)
+        error_quat = normalize(error_quat)
+
+        # print(f"Nadir body (step {i}): {nadir_body[0]:.3f}, {nadir_body[1]:.3f}, {nadir_body[2]:.3f}")
+        # print(f"    error_quat: {error_quat[0]:.3f}, {error_quat[1]:.3f}, {error_quat[2]:.3f}, {error_quat[3]:.3f}")
+        # print(f"    Angle error (deg): {quaternion_to_angle(error_quat):.3f}")
+        # print(f"    Off-nadir angle (deg): {off_nadir_angle(nadir_body):.3f}")
+
+        if ADCS_TYPE != "AD":
+            self.errorQuats[i] = error_quat
+            self.nadirError[i] = np.linalg.norm(error_quat[1:])
+
+        self.trueErrorQuats[i] = error_quat
+        self.trueNadirError[i] = np.linalg.norm(error_quat[1:])
+
+        return nadir_body, error_quat
+
+
+    def process_images(self, image1, image2, i):
+        '''
+        Takes in our two simulated EHS images and stores the info in mag_sat object
+        '''
+        # image1_results = processImage(image1, degree=1)
+        image1_results = firmwareImageProcessing(image1)
+        self.mag_sat.cam1.roll = image1_results[0]
+        self.mag_sat.cam1.pitch = image1_results[1]
+        self.mag_sat.cam1.alpha = image1_results[2]
+        self.mag_sat.cam1.edges = image1_results[3]
+        self.mag_sat.cam1.midpoint = image1_results[4]
+        self.mag_sat.cam1.ends = image1_results[5]
+        # image2_results = processImage(image2, degree=1)
+        image2_results = firmwareImageProcessing(image2)
+        self.mag_sat.cam2.roll = image2_results[0]
+        self.mag_sat.cam2.pitch = image2_results[1]
+        self.mag_sat.cam2.alpha = image2_results[2]
+        self.mag_sat.cam2.edges = image2_results[3]
+        self.mag_sat.cam2.midpoint = image2_results[4]
+        self.mag_sat.cam2.ends = image2_results[5]
+        self.mag_sat.updateAlphaReadings()
+
+        # # if we don't see horizon, differentiate between seeing all earth and all space
+        if self.mag_sat.cam1.roll == -1:
+            if self.mag_sat.cam1_alpha_increasing:
+                # if the last few images saw increasingly more earth, we assume we're now seeing all earth
+                self.mag_sat.cam1.alpha = 1.0
+            else:
+                # if we were seeing less and less earth, assume we're seeing space now
+                self.mag_sat.cam1.alpha = 0.0
+
+        # same for cam2
+        if self.mag_sat.cam2.roll == -1:
+            if self.mag_sat.cam2_alpha_increasing:
+                # if the last few images saw increasingly more earth, we assume we're now seeing all earth
+                self.mag_sat.cam2.alpha = 1.0
+            else:
+                # if we were seeing less and less earth, assume we're seeing space now
+                self.mag_sat.cam2.alpha = 0.0
+
+        # for loop that controls how many in advance we need to save
+        # ex: if we're simulating every other cam, set same measurements for next time step
+        for a in range(PIC_INTERVAL):
+            if i + a < self.n:
+                self.pitches1[i + a] = self.mag_sat.cam1.pitch
+                self.rolls1[i + a] = self.mag_sat.cam1.roll
+                self.edges1[i + a] = self.mag_sat.cam1.edges
+
+                self.pitches2[i + a] = self.mag_sat.cam2.pitch
+                self.rolls2[i + a] = self.mag_sat.cam2.roll
+                self.edges2[i + a] = self.mag_sat.cam2.edges
+
+
     def plotData(self):
         '''
         plots the magnetometer (magData.png) and gyroscope data (magData.png) found in self.data
         '''
         plotData_xyz(self.data)
+        # also plot b field of earth
+        plot_xyz(self.B_earth, "Earth's Magnetic Field (ECI frame from PySOL)", fileName="B_earth.png", ylabel="Magnetic Field (microteslas)")
+        if RUNNING_MAYA:
+            plot_multiple_lines([self.pitches1, self.rolls1, self.pitches2, self.rolls2],["Pitch1", "Roll1", "Pitch2", "Roll2"], "Image Processing",fileName="Pitch_Roll.png",ylabel="Angle (Degrees)")
+            plot_multiple_lines([self.edges1[:, 0], self.edges1[:, 1], self.edges1[:, 2], self.edges1[:, 3]],["Top", "Right", "Bottom", "Left"], "Edge Intensities 1",fileName="Edges1.png",ylabel="Relative %")
+            plot_multiple_lines([self.edges2[:, 0], self.edges2[:, 1], self.edges2[:, 2], self.edges2[:, 3]],["Top", "Right", "Bottom", "Left"], "Edge Intensities 2",fileName="Edges2.png",ylabel="Relative %")
 
 
     def plotStates(self):
         '''
         plots the filtered states (filteredQuaternion.png, filteredVelocity.png) found in self.filtered_states
-        also plots ideal states (idealQuaternion.png, idealVelocity.png) found in self.states if IDEAL_KNOWN = True
+        also plots the states found in self.states
         also also plots the euler angle of our ideal state (with respect to our starting state)
         '''
-        if IDEAL_KNOWN:
-            plotState_xyz(self.states, IDEAL_KNOWN)
-
-        plotState_xyz(self.filtered_states, False)
+        plotState_xyz(self.states)
+        plot_multiple_lines([self.mode], ["Mode"], "Satellite Mode", fileName="Mode.png", ylabel="Mode")
+        plot_multiple_lines([self.nadirError, self.trueNadirError], ["Found Nadir Error", "True Nadir Error"], "Magnitude of Error Quaternion", fileName="Error.png", ylabel="Magnitude of Error")
+        plot_multiple_lines([[np.linalg.norm(v) for v in self.states[:, -3:]]], ["Angular Velocity Magnitude"], "Magnitude of Angular Velocity", fileName="Velocity_Magnitude.png", ylabel="Magnitude of Angular Velocity")
         # unpack the filtered quaternion and convert it to euler angles
         # use the error quaternion between our starting state and current state to base angle off of starting point
-        plotAngles(np.array([quaternion_to_euler(*delta_q(a[:4], QUAT_INITIAL)) for a in self.filtered_states]), "Euler angles", fileName="Euler.png")
+        plotAngles(np.array([quaternion_to_euler(*delta_q(a[:4], QUAT_INITIAL)) for a in self.states]), "Euler angles", fileName="Euler.png")
         # plotAngles(np.array([quaternion_to_euler(*a[:4]) for a in self.filtered_states]), "Euler angles", fileName="Euler.png")
+
+        plotState_xyz(self.filtered_states, False)
 
 
     def plotWheelInfo(self):
@@ -793,16 +912,22 @@ class Simulator():
         plot_multiple_lines([self.rw_currents], ["Motor Current"], "Motor Current", fileName="Current.png")
 
 
-    def plot_and_viz_results(self, controller=None, target=np.array([1, 0, 0, 0]), sum=0):
+    def plotMagInfo(self):
+        '''
+        Plots the currents and torque created by our magnetorquers
+        '''
+        plot_xyz(self.voltages, "Voltages", fileName="Voltages.png", ylabel="Voltage (Volts)")
+        plot_xyz(self.currents, "Currents", fileName="Currents.png", ylabel="Current (Amps)")
+        plot_xyz(self.torques, "Torques", fileName="Torques.png", ylabel="Torque (N*m)")
+        plot_xyz(self.power_output, "Power Usage", fileName="Power_Output.png", ylabel="Power (Watts)")
+        # plot_multiple_lines([self.totalPower],["Total Power"], "Total Power Output",fileName="Total_Power_Output.png",ylabel="Power (Watts)")
+
+
+    def plot_and_viz_results(self):
         '''
         Plots out filter states, data, and reaction wheel speeds, and creates pdf output + 3D visualization
         Allows us to visualize results of our filter/controls sim
         Based upon RESULT variable in params.py
-
-        @params:
-            controller: PIDController object (for controls sim)
-            target: target quaternion (for controls sim)
-            sum: sum of statistical tests if they were run
         '''
 
         # clear output directory from last simulation
@@ -810,29 +935,30 @@ class Simulator():
 
         # plot mag and gyro data
         self.plotData()
-        # plots filtered states (and ideal states if ideal_known = True)
+        # plots states
         self.plotStates()
-        # plot reaction wheel speeds
-        self.plotWheelInfo()
+        # plot magnetorquer info
+        self.plotMagInfo()
 
         # 0 = only create pdf output, 1 = show 3D animation visualization, 2 = both, 3 = none
         visualize = RESULT
 
         if visualize == 1:
-            self.visualizeResults(self.filtered_states)
+            self.visualizeResults(self.states)
 
         elif visualize == 0:
 
-            self.saveFile(OUTPUT_FILE, controller, target, sum, RUN_STATISTICAL_TESTS)
+            self.saveFile(OUTPUT_FILE)
 
         elif visualize == 2:
 
-            self.saveFile(OUTPUT_FILE, controller, target, sum, RUN_STATISTICAL_TESTS)
+            self.saveFile(OUTPUT_FILE)
 
-            self.visualizeResults(self.filtered_states)
+            self.visualizeResults(self.states)
 
         # only show plot at end so they all show up
-        plt.show()
+        if not RUNNING_MAYA:
+            plt.show()
 
 
     def runTests(self):
@@ -851,7 +977,7 @@ class Simulator():
         return sum
 
 
-    def saveFile(self, fileName, controller=None, target=[1, 0, 0, 0], sum=0, printTests=False):
+    def saveFile(self, fileName):
         '''
         takes all saved pngs and compiles a pdf with the given fileName
         uses the formating function found within saving.py
@@ -861,19 +987,18 @@ class Simulator():
 
         # savePNGs(OUTPUT_DIR)
 
-        savePDF(fileName, OUTPUT_DIR, self, controller, target, sum, printTests)
+        savePDF(fileName, OUTPUT_DIR, self)
 
-        openFile(fileName)
+        if not RUNNING_MAYA:
+            openFile(fileName)
 
 
-    def visualizeResults(self, states):
+    def visualizeResults(self, states, i = 0):
         '''
         Given an array of states, visualize the cubesat moving in 3D
         '''
         # TODO: rewrite functions that visualize different data sets: ideal, filtered, data
         #   with plotting, cubesat, etc
 
-        # or visualize 3 things: raw, filtered, ideal
-
-        game_visualize(np.array(states), 0)
+        game_visualize(np.array(states), i)
 

@@ -40,7 +40,7 @@ RW_VOLTAGES_INITIAL = np.array([0.0, 0.0, 0.0])
 MAG_CURRENT_INITIAL = np.array([0.0, 0.0, 0.0])
 MAG_VOLTAGE_INITIAL = np.array([0.0, 0.0, 0.0])
 RW_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
-STARTING_PROTOCOL = "point" # "detumble", "point"
+STARTING_PROTOCOL = "point" # "detumble", "point", "target_point"
 
 # ============  ORBITAL DYNAMICS  ==================================================
 
@@ -86,6 +86,12 @@ DETUMBLE_THRESHOLD = 0.5
 if not DEGREES:
     DETUMBLE_THRESHOLD *= math.pi / 180
 
+# bitmask that represents whether we have wheels on x, y, z, or skew axes
+RW_AXES = np.array([1, 0, 0, 0])
+MAG_AXES = np.array([0, 0, 0])
+# bitmask for which axes we can rotate about
+FREEDOM_OF_MOVEMENT_AXES = np.array([1, 1, 1])
+
 STATE_SPACE_DIMENSION = 7
 MEASUREMENT_SPACE_DIMENSION = 6
 
@@ -101,11 +107,6 @@ B_FIELD_CSV_FILE = "leo_oe_10.csv"
 CONSTANT_B_FIELD = False
 SENSOR_NOISE = True
 STANDSTILL = False # keep satellite in same position around the earth
-
-# bitmask that represents whether we have wheels on x, y, z, or skew axes
-RW_OFF = True
-WHEELS_AXES = np.array([1, 0, 0, 0])
-MAGNETORQUER_AXES = np.array([0, 0, 0])
 
 # if true, turn off our magnetorquers to take magnetometer readings
 ACCURATE_MAG_READINGS = False
@@ -349,20 +350,19 @@ FERRO_MAX_MAGNETIC_MOMENT = FERRO_NUM_TURNS * FERRO_AREA * MAX_CURRENT_MAG * FER
 if (RUNNING_1D):
 
     # bitmask that represents which axis our torquer is mounted upon
-    MOUNTING_AXES = np.array([1,1,1])
+    MAG_AXES = np.array([1,1,1])
     # bitmask for orientation of table: only movement along z axis should be allowed
-
-    TABLE_MASK = np.array([0,0,1])
+    FREEDOM_OF_MOVEMENT_AXES = np.array([0,0,1])
     # if true, replace proper torquer with aircore
     TEST_AIRCORE = False
 
-    VELOCITY_INITIAL = np.array([0.0, 0.0, 0.0])*TABLE_MASK
+    VELOCITY_INITIAL = np.array([0.0, 0.0, 0.0])*FREEDOM_OF_MOVEMENT_AXES
     # what magnetic moment to create along each axis (should only be 1 axis)
     if TEST_AIRCORE:
         #using maxing to return an array
-        DESIRED_MAGNETIC_MOMENTS = AIR_MAX_MAGNETIC_MOMENT*MOUNTING_AXES
+        DESIRED_MAGNETIC_MOMENTS = AIR_MAX_MAGNETIC_MOMENT*MAG_AXES
     else:
-        DESIRED_MAGNETIC_MOMENTS = FERRO_MAX_MAGNETIC_MOMENT*MOUNTING_AXES
+        DESIRED_MAGNETIC_MOMENTS = FERRO_MAX_MAGNETIC_MOMENT*MAG_AXES
     DESIRED_ANGLE = np.array([-90, 0, 0]) # desired angle for x axis
 
     # ==========  1D DETUMBLE/GUI  =====================================
@@ -382,16 +382,16 @@ if (RUNNING_1D):
         gui.mainloop() #this will run until it closes
         gui.velocity = float(gui.velocity)
         if (gui.axes == "x"):
-            MOUNTING_AXES = np.array([1,0,0])
-       # VELOCITY_INITIAL = np.array([gui.velocity, 0.0, 0.0])*TABLE_MASK
+            MAG_AXES = np.array([1,0,0])
+       # VELOCITY_INITIAL = np.array([gui.velocity, 0.0, 0.0])*FREEDOM_OF_MOVEMENT_AXES
 
         elif (gui.axes == "y"):
-            MOUNTING_AXES = np.array([0,1,0])
+            MAG_AXES = np.array([0,1,0])
         #VELOCITY_INITIAL = np.array([0.0, gui.velocity, 0.0])
 
         else:
-            MOUNTING_AXES = np.array([0,0,1])
-        VELOCITY_INITIAL = np.multiply(np.array([0.0, 0.0, gui.velocity]),TABLE_MASK)
+            MAG_AXES = np.array([0,0,1])
+        VELOCITY_INITIAL = np.multiply(np.array([0.0, 0.0, gui.velocity]),FREEDOM_OF_MOVEMENT_AXES)
         gui.time = float(gui.time)
         HOURS = gui.time / 3600 # simulation time in hours
         print(gui.time,gui.velocity,gui.axes)
