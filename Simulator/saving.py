@@ -100,7 +100,7 @@ def savePDF(outputFile, pngDir, sim):
 
         pdf.add_page()
 
-    if RW_AXES != np.array([0, 0, 0, 0]):
+    if not np.array_equal(RW_AXES, np.array([0, 0, 0, 0])):
         # If we're simulating any reaction wheels, include their graphs
         pdfHeader(pdf, "Reaction Wheels")
 
@@ -112,7 +112,7 @@ def savePDF(outputFile, pngDir, sim):
         pdf.image(os.path.join(pngDirectory, "ReactionSpeeds.png"), x = x_offset, y = pdf.get_y(), w = 180)
         pdf.add_page()
 
-    if MAG_AXES != np.array([0, 0, 0]):
+    if not np.array_equal(MAG_AXES, np.array([0, 0, 0])):
         # removed total power for now
         # pdf.image(os.path.join(pngDirectory, "Total_Power_Output.png"), x = x_offset, y = pdf.get_y(), w = 180)
 
@@ -182,9 +182,9 @@ Measurement Noise:
 
     hardwareMessage = ""
     # Display info about which hardware we've simulated
-    if RW_AXES != np.array([0, 0, 0, 0]):
-        hardwareMessage += f"Reaction Wheels present: {RW_AXES}\n"
-    if MAG_AXES != np.array([0, 0, 0]):
+    if not np.array_equal(RW_AXES, np.array([0, 0, 0, 0])):
+        hardwareMessage += f"Reaction Wheels present: {RW_AXES}\n\n"
+    if not np.array_equal(MAG_AXES, np.array([0, 0, 0])):
         # Place the correct mag_sat.mags here based on MAG_AXES
         hardwareMessage += f"Magnetorquers:\n"
         if MAG_AXES[0] != 0:
@@ -224,13 +224,10 @@ Satellite info:
 
     pdf.multi_cell(0, 5, infoText, 0, 'L')
 
-    pdf.add_page()
     if RUN_STATISTICAL_TESTS:
 
         pdf.add_page()
-
         pdfHeader(pdf, "Tests")
-
         testText = f"""We have two metrics for examining our filter: statistical and speed tests.
 
     Speed tests:
@@ -300,13 +297,12 @@ Satellite info:
         pdf.image(os.path.join(pngDirectory, "test3-5.png"), x=5, y=pdf.get_y(), w=105)
         pdf.image(os.path.join(pngDirectory, "test3-6.png"), x=100, y=pdf.get_y(), w=105)
 
-        pdf.add_page()
 
     if RUNNING_MAYA:
+        pdf.add_page()
         pdf.image(os.path.join(pngDirectory, "Pitch_Roll.png"), x = x_offset, y = pdf.get_y(), w = 180)
 
         pdf.add_page()
-
         pdf.image(os.path.join(pngDirectory, "Edges1.png"), x = x_offset, y = pdf.get_y(), w = 180)
         pdf.ln(y_pic_offset)
         pdf.image(os.path.join(pngDirectory, "Edges2.png"), x = x_offset, y = pdf.get_y(), w = 180)

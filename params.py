@@ -19,29 +19,21 @@ from Simulator.gui import GUI
 
 DEGREES = False
 
-# TODO list: max torque, transverse inertia, accurate motor params
-#   add pysol constants
-
-# Pulse Width Modulation (PWM) signal that generates the max speed in our motors
-MAX_PWM = 65535
-# (TODO) max torque that our wheels can handle (Nm)
-MAX_RW_TORQUE = 0.02
-
 # ============  INITIAL VALUES  ======================================
 
 QUAT_INITIAL = np.array([1.0, 0.0, 0.0, 0.0])
 # degrees/s. Detumbling starts at ~15 deg/s
-VELOCITY_INITIAL = np.array([0.0, 0.0, 0.0])
+VELOCITY_INITIAL = np.array([15.0, 0.0, 0.0])
 # convert to rad/s
 if not DEGREES:
     VELOCITY_INITIAL *= math.pi / 180
-RW_CURRENTS_INITIAL = np.array([0.0, 0.0, 0.0])
-RW_VOLTAGES_INITIAL = np.array([0.0, 0.0, 0.0])
+RW_CURRENTS_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
+RW_VOLTAGES_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
 MAG_CURRENT_INITIAL = np.array([0.0, 0.0, 0.0])
 MAG_VOLTAGE_INITIAL = np.array([0.0, 0.0, 0.0])
 RW_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
-STARTING_PROTOCOL = "point" # "detumble", "point", "target_point"
-PROTOCOL_MAP = {"demagnetize": -2, "detumble": -1, "point": 0, "target_point": 1}
+STARTING_PROTOCOL = "detumble" # "detumble", "point", "target_point", "idle"
+PROTOCOL_MAP = {"demagnetize": -2, "detumble": -1, "idle": 0, "point": 1, "target_point": 2}
 
 # ============  ORBITAL DYNAMICS  ==================================================
 
@@ -73,8 +65,8 @@ EARTH_MAGNETIC_FIELD_LEO = 30e-6  # Average magnetic flux density in LEO [T]
 # ============  SIM OPTIONS  ==============================================================
 
 # total time to run sim (unrounded hours)
-# HOURS = ORBITAL_PERIOD / 3600
-HOURS = .01
+HOURS = ORBITAL_PERIOD / 3600
+# HOURS = 0.03
 print("simulation time: ", round(HOURS, 6), "hours")
 # total time to run sim (seconds)
 TF = int(HOURS * 3600)
@@ -88,8 +80,8 @@ if not DEGREES:
     DETUMBLE_THRESHOLD *= math.pi / 180
 
 # bitmask that represents whether we have wheels on x, y, z, or skew axes
-RW_AXES = np.array([1, 0, 0, 0])
-MAG_AXES = np.array([0, 0, 0])
+RW_AXES = np.array([0, 0, 0, 0])
+MAG_AXES = np.array([1, 1, 1])
 # bitmask for which axes we can rotate about
 FREEDOM_OF_MOVEMENT_AXES = np.array([1, 1, 1])
 
@@ -125,7 +117,7 @@ RUN_UKF = False
 # for simple 1D testbed validation (with a suboption for detumble)
 RUNNING_1D = False
 # whether you're running in Debart with 3D rendering (check 3D settings at bottom if so)
-RUNNING_MAYA = True
+RUNNING_MAYA = False
 # 0 = only create pdf output, 1 = show 3D animation visualization, 2 = both, 3 = none
 RESULT = 0
 OUTPUT_DIR = "plotOutput"
@@ -139,14 +131,9 @@ TIME_GRAPHING_ARRAY = TIME_GRAPHING_ARRAY / 3600
 GYRO_WORKING = True
 MAG_READINGS_STORED = 5
 
-# whether we know our ideal states (or are using real data)
-IDEAL_KNOWN = False
-
-SENSOR_DATA_FILE = None
-if not IDEAL_KNOWN:
-    # if SENSOR_DATA_FILE points to a valid file, we are using data stored in that file
-    # if SENSOR_DATA_FILE is None, we are using live data from the sensors
-    SENSOR_DATA_FILE = "data.txt"
+# if SENSOR_DATA_FILE points to a valid file, we are using data stored in that file
+# if SENSOR_DATA_FILE is None, we are using live data from the sensors
+SENSOR_DATA_FILE = "data.txt"
 
 
 # =======  UKF  =================================================
@@ -258,13 +245,20 @@ else:
 # mag noise density from vn100 website = 140 uGauss /sqrt(Hz)
 # TODO: confirm these noise densitites
 SENSOR_MAGNETOMETER_SD = (140 * 10e-6) * np.sqrt(200)
+# SENSOR_MAGNETOMETER_SD *= 50
 
 # gyro noise density from vn100 website = 0.0035 degree/s /sqrt(Hz)
 SENSOR_GYROSCOPE_SD = 0.0035 * np.sqrt(200)
+# SENSOR_GYROSCOPE_SD *= 50
 if not DEGREES:
     SENSOR_GYROSCOPE_SD *= (np.pi / 180)
 
 # =======  REACTION WHEELS  ================================================
+
+# Pulse Width Modulation (PWM) signal that generates the max speed in our motors
+MAX_PWM = 65535
+# (TODO) max torque that our wheels can handle (Nm)
+MAX_RW_TORQUE = 0.02
 
 # motor model parameters (Maxon DCX 8 M (9 volts)) used for controls sim
 # TODO: find accurate numbers for these

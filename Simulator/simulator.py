@@ -63,7 +63,7 @@ class Simulator():
         self.innovationCovs = np.zeros((self.n, self.dim_mes, self.dim_mes))
 
         # noise arrays for magnetometer and gyroscope (if we're using ideal states to simulate sensor data)
-        if SENSOR_NOISE and IDEAL_KNOWN:
+        if SENSOR_NOISE:
             magSD = SENSOR_MAGNETOMETER_SD
             self.magNoises = np.random.normal(0, magSD, (self.n, 3))
 
@@ -183,7 +183,6 @@ class Simulator():
             self.edges2 = np.zeros((self.n, 4))
 
         # what mode we're in for each time step
-        # 'demagnetize' = -2 (turning off torquers momentarily), 'detumble' = -1, 'point' = 0
         self.mode = np.zeros((self.n))
 
         # Set the total energy to 0 at the start (joules)
@@ -467,7 +466,8 @@ class Simulator():
                         self.energy = self.energy + self.totalPower[step]*self.dt
 
                     # move to nadir pointing protocol
-                    return "point"
+                    # return "point"
+                    return "idle"
 
             return "detumble"
 
@@ -499,6 +499,8 @@ class Simulator():
             #     return "point"
         elif self.mag_sat.state == "target_point":
             return "target_point"
+        elif self.mag_sat.state == "idle":
+            return "idle"
         else:
             return "INVALID"
 
@@ -507,15 +509,15 @@ class Simulator():
         '''
         Based on saved sensor data and current protocol state, generate correct controls voltages
             Also set voltage to zero if we're approaching a magnetometer reading
-        Voltage for next step is stored in self.voltages[i]
+        Voltage for next step is stored in self.mag_voltages[i]
         Info about what mode we're in is stored in self.mode[i]
         '''
         if ACCURATE_MAG_READINGS and self.torquersOffTimer == 1:
 
             # if we just started turning off our torquers, send burst of voltage in opposite direction
             # this simulates demagnitizing the magnetorquer core (theoritically)
-            if np.linalg.norm(self.voltages[i - 1]) > 0:
-                self.voltages[i] = np.array([- DEMAGNITIZING_VOLTAGE * (v / abs(v)) for v in self.voltages[i - 1]])
+            if np.linalg.norm(self.mag_voltages[i - 1]) > 0:
+                self.mag_voltages[i] = np.array([- DEMAGNITIZING_VOLTAGE * (v / abs(v)) for v in self.mag_voltages[i - 1]])
             self.mode[i] = PROTOCOL_MAP['demagnetize']
             self.errorQuats[i] = self.errorQuats[i - 1]
             self.nadirError[i] = self.nadirError[i - 1]
@@ -523,7 +525,7 @@ class Simulator():
         elif ACCURATE_MAG_READINGS and self.torquersOffTimer * self.dt > 0:
 
             # if torquers are off as they demagnitize, set voltage to 0
-            self.voltages[i] = np.zeros((3))
+            self.mag_voltages[i] = np.zeros((3))
             self.mode[i] = PROTOCOL_MAP['demagnetize']
             self.errorQuats[i] = self.errorQuats[i - 1]
             self.nadirError[i] = self.nadirError[i - 1]
@@ -531,8 +533,8 @@ class Simulator():
         elif RUNNING_1D and not DETUMBLE_1D:
 
             # for 1D test, use simple custom controller
-            self.voltages[i] = maxPowerController(DESIRED_MAGNETIC_MOMENTS, self.mag_sat)
-            self.voltages[i] = np.clip(self.voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
+            self.mag_voltages[i] = maxPowerController(DESIRED_MAGNETIC_MOMENTS, self.mag_sat)
+            self.mag_voltages[i] = np.clip(self.mag_voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
             self.mode[i] = PROTOCOL_MAP['detumble']
 
         elif self.mag_sat.state == "detumble":
@@ -540,14 +542,15 @@ class Simulator():
             # if running b-dot instead of b-cross, don't run until we have proper data
             if GYRO_WORKING or len(self.mag_sat.prevB) >= MAG_READINGS_STORED:
                 # oppose angular velocity
-                self.voltages[i] = B_dot(self.mag_sat)
-                self.voltages[i] = np.clip(self.voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
+                self.mag_voltages[i] = B_dot(self.mag_sat)
+                self.mag_voltages[i] = np.clip(self.mag_voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
+
             self.mode[i] = PROTOCOL_MAP['detumble']
 
         # elif self.mag_sat.state == "search":
 
         #     # do nothing while horizon searching, for now
-        #     self.voltages[i] = np.zeros((3))
+        #     self.mag_voltages[i] = np.zeros((3))
         #     self.mode[i] = -1
 
         elif self.mag_sat.state == "point":
@@ -563,18 +566,18 @@ class Simulator():
                     self.errorQuats[i] = AD_results[2]
                     self.nadirError[i] = np.linalg.norm(self.errorQuats[i][1:])
 
-                self.voltages[i] = nadir_point(self.errorQuats[i], self.mag_sat)
+                self.mag_voltages[i] = nadir_point(self.errorQuats[i], self.mag_sat)
                 self.mode[i] = PROTOCOL_MAP['point']
                 # We still clamp voltages on firmware
-                self.voltages[i] = np.clip(self.voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
+                self.mag_voltages[i] = np.clip(self.mag_voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
             else:
                 # If we don't have a new image, don't bother running controls loop
-                self.voltages[i] = self.voltages[i - 1]
+                self.mag_voltages[i] = self.mag_voltages[i - 1]
                 self.mode[i] = self.mode[i - 1]
                 self.errorQuats[i] = self.errorQuats[i - 1]
                 self.nadirError[i] = self.nadirError[i - 1]
 
-        elif self.state == "target_point":
+        elif self.mag_sat.state == "target_point":
             # run state through our control script to get pwm signals for motors
 
             # Get current quaternion and angular velocity of cubesat
@@ -585,6 +588,9 @@ class Simulator():
             self.pwms[i] = self.controller.pid_controller(quaternion, TARGET, omega, self.pwms[i-1])
             self.mode[i] = PROTOCOL_MAP['target_point']
 
+        elif self.mag_sat.state == "idle":
+            self.mode[i] = PROTOCOL_MAP['idle']
+
         # Clamp with bitmask
         self.pwms[i] *= RW_AXES
         self.mag_voltages[i] *= MAG_AXES
@@ -593,7 +599,7 @@ class Simulator():
     def propagate_step(self, i):
         '''
         Based on our last state and voltage output from our controls (voltages[i]), progate through our EOMs to get the next state
-        Populates self.states[i], self.torques[i], and self.currents[i] the end of the timestep
+        Populates self.states[i], self.torques[i], and self.mag_currents[i] the end of the timestep
         '''
 
         mag_currents = self.mag_currents[i - 1]
@@ -608,7 +614,7 @@ class Simulator():
         # calculate power output of magnetorquers = current output * operational voltage
         # power = np.abs(MAX_VOLTAGE * currents)
         # P = V * I
-        # power = np.abs(self.voltages[i] * currents)
+        # power = np.abs(self.mag_voltages[i] * currents)
         # TODO: or V^2 / R?
         power = np.abs((self.mag_voltages[i] * self.mag_voltages[i]) / self.mag_sat.resistances)
         if sum(power) > MAX_POWER_NADIR and self.mag_sat.state == "point":
@@ -648,117 +654,7 @@ class Simulator():
             quaternion_new, w_sat_new = rk4(self.states[i-1], self.rw_speeds[i], alpha, self.torques[i], self.dt, self.mag_sat.I_body)
 
         self.states[i] = np.concatenate((quaternion_new, w_sat_new))
-        self.currents[i] = mag_currents
-
         return self.states[i]
-
-
-    def simulate(self):
-        '''
-        Simulates the state estimation process for n time steps
-        Runs the specified kalman filter upon the the object's initial state and data/reaction wheel speeds for each time step
-            Uses self.rw_speeds: reaction wheel speed for each time step (n x 3) and self.data: data reading for each time step (n x dim_mes)
-
-        Stores 2D array of estimated states (quaternions, angular velocity) in self.filter_states, covariances in self.covs, and innovation values and covariances in self.innovations/self.innovationCovs
-        Also stores time taken for each estimation in self.times
-
-        '''
-
-        states = []
-
-        # initialize current reaction wheel speed
-        self.curr_reaction_speeds = self.rw_speeds[0]
-
-        # run each of n steps through the filter
-        for i in range(self.n):
-            # store old reaction wheel speed
-            self.old_reaction_speeds = self.curr_reaction_speeds
-            self.curr_reaction_speeds = self.rw_speeds[i]
-
-            start = time.time()
-            # propagate current state through kalman filter and store estimated state and innovation
-            self.state, self.cov, self.innovations[i], self.innovationCovs[i] = self.kalmanMethod(self.state, self.cov, self.Q, self.R, self.dt, self.B_true[i], self.curr_reaction_speeds, self.old_reaction_speeds, self.data[i])
-            end = time.time()
-
-            # store time taken for each step
-            self.times[i] = end - start
-
-            states.append(self.state)
-            self.covs[i] = self.cov
-
-        self.filtered_states = states
-        return states
-
-
-    def run_controls_sim(self):
-        '''
-        Combines motor dynamics and PID controller to orient towards a target
-        Propogates our state step by step, as we want to dynamically change our "ideal" state based on our control output
-        '''
-
-        # generate data for first step so we can start at i = 1
-        self.generateData_step(0)
-
-        # define our target orientation and whether we want to reverse it halfway through
-        # TODO: x axis is bugged (or just different moments of inertia). Wants to go sideways
-        target = normalize(TARGET)
-        flip = False
-
-        for i in range(1, self.n):
-
-            # get ideal next state based on current state and reaction wheel speeds of this step
-            # NOTE: this "ideal" state is not super based on truth because it is not generated beforehand.
-            #       it basically follows what our filter does, so it is not a good representation of the truth
-            ideal = self.propagate_step(i)
-
-            # create fake magnetometer data by rotating B field by ideal quaternion, and gyro by adding noise to angular velocity
-            self.generateData_step(i)
-
-            # filter our data and get next state
-            # also run through our controls to get pwm => voltage => current => speed of reaction wheels
-            filtered = self.simulate_step(i, target)
-            # game_visualize(np.array([filtered]), i-1)
-
-            # optionally return to starting orientation halfway through
-            if i > self.n / 2 and flip == True:
-                target = normalize(QUAT_INITIAL)
-
-        # plot our results and create pdf output + 3D visualization
-        self.plot_and_viz_results(controller=self.controller, target=target)
-
-
-    def run_filter_sim(self):
-        '''
-        Generates ideal states and sensor data, allowing us to benchmark our kalman filter against simulated "truth".
-        Can also be run with pre-existing sensor data (ideal_known = False and SENSOR_DATA_FILE != None)
-        '''
-
-        # text file with data values
-        dataFile = SENSOR_DATA_FILE
-
-        if IDEAL_KNOWN:
-            # decide how we want our reaction wheels to spin at each time step
-            # parameters: max speed, min speed, number of steps to flip speed after, step, bitset of which wheels to activate
-            self.generateSpeeds(400, -400, self.n, 40, np.array([0, 1, 0, 0]))
-
-            # find ideal state of cubesat through physics equations of motion
-            self.propagate()
-
-        # generate data reading for each step
-        self.populateData()
-
-        # run our data through the specified kalman function
-        self.simulate()
-
-        # if true, run statistical tests outlined in Estimation II by Ian Reed
-        # these tests allow us to see how well our filter is performing
-        runTests = RUN_STATISTICAL_TESTS
-        sum = 0
-        if runTests:
-            sum = self.runTests()
-
-        # plot our results and create pdf output + 3D visualization
-        self.plot_and_viz_results(sum=sum)
 
 
     def findTrueNadir(self, ideal, gps, i):
@@ -891,7 +787,7 @@ class Simulator():
         plot_multiple_lines([[np.linalg.norm(v) for v in self.states[:, -3:]]], ["Angular Velocity Magnitude"], "Magnitude of Angular Velocity", fileName="Velocity_Magnitude.png", ylabel="Magnitude of Angular Velocity")
         # unpack the filtered quaternion and convert it to euler angles
         # use the error quaternion between our starting state and current state to base angle off of starting point
-        plotAngles(np.array([quaternion_to_euler(*delta_q(a[:4], QUAT_INITIAL)) for a in self.states]), "Euler angles", fileName="Euler.png")
+        plotAngles(np.array([quaternion_to_euler(delta_q(a[:4], QUAT_INITIAL)) for a in self.states]), "Euler angles", fileName="Euler.png")
         # plotAngles(np.array([quaternion_to_euler(*a[:4]) for a in self.filtered_states]), "Euler angles", fileName="Euler.png")
 
         plotState_xyz(self.filtered_states, True)
@@ -917,8 +813,8 @@ class Simulator():
         '''
         Plots the currents and torque created by our magnetorquers
         '''
-        plot_xyz(self.voltages, "Mag Voltages", fileName="MagVoltages.png", ylabel="Voltage (Volts)")
-        plot_xyz(self.currents, "Mag Currents", fileName="MagCurrents.png", ylabel="Current (Amps)")
+        plot_xyz(self.mag_voltages, "Mag Voltages", fileName="MagVoltages.png", ylabel="Voltage (Volts)")
+        plot_xyz(self.mag_currents, "Mag Currents", fileName="MagCurrents.png", ylabel="Current (Amps)")
         plot_xyz(self.torques, "Mag Torques", fileName="MagTorques.png", ylabel="Torque (N*m)")
         plot_xyz(self.power_output, "Power Usage", fileName="Power_Output.png", ylabel="Power (Watts)")
         # plot_multiple_lines([self.totalPower],["Total Power"], "Total Power Output",fileName="Total_Power_Output.png",ylabel="Power (Watts)")
@@ -934,12 +830,10 @@ class Simulator():
         # clear output directory from last simulation
         clearDir(OUTPUT_DIR)
 
-        # plot mag and gyro data
         self.plotData()
-        # plots states
         self.plotStates()
-        # plot magnetorquer info
         self.plotMagInfo()
+        self.plotWheelInfo()
 
         # 0 = only create pdf output, 1 = show 3D animation visualization, 2 = both, 3 = none
         visualize = RESULT
@@ -948,13 +842,10 @@ class Simulator():
             self.visualizeResults(self.states)
 
         elif visualize == 0:
-
             self.saveFile(OUTPUT_FILE)
 
         elif visualize == 2:
-
             self.saveFile(OUTPUT_FILE)
-
             self.visualizeResults(self.states)
 
         # only show plot at end so they all show up

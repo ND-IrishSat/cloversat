@@ -11,15 +11,10 @@ import numpy as np
 import sys
 import os
 
-# if RUNNING_MAYA:
-    # import NearSpace.Simulator.magnetorquer as mag
-    # import NearSpace.Simulator.camera as cam
-    # from NearSpace.params import *
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import Simulator.magnetorquer as mag
 import Simulator.camera as cam
-from Pointing.image_processing import processImage
+from Controllers.Pointing.image_processing import processImage
 # import params module from parent directory
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from params import *

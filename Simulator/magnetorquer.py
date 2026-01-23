@@ -11,14 +11,10 @@ import sys
 import math
 import numpy as np
 
-# if RUNNING_MAYA:
-    # from NearSpace.params import *
-
 # import params module from parent directory
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from params import *
-from Simulator.all_EOMs import normalize, quaternion_to_euler
-
+from Utils.transformations import normalize, quaternion_to_euler
 
 class Magnetorquer():
     '''Class to hold a single magnetorquer'''
