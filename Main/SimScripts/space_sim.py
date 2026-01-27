@@ -72,6 +72,8 @@ def main():
         # find how far we are from nadir (for controller input)
         sim.findTrueNadir(sim.states[i-1], gps[i], i)
 
+        # Filter somewhere here
+
         # check what protocol we should be in and update state
         sim.mag_sat.state = sim.check_state(i)
 

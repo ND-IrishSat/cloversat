@@ -65,8 +65,8 @@ EARTH_MAGNETIC_FIELD_LEO = 30e-6  # Average magnetic flux density in LEO [T]
 # ============  SIM OPTIONS  ==============================================================
 
 # total time to run sim (unrounded hours)
-HOURS = ORBITAL_PERIOD / 3600
-# HOURS = 0.03
+# HOURS = ORBITAL_PERIOD / 3600
+HOURS = 0.03
 print("simulation time: ", round(HOURS, 6), "hours")
 # total time to run sim (seconds)
 TF = int(HOURS * 3600)
@@ -80,8 +80,8 @@ if not DEGREES:
     DETUMBLE_THRESHOLD *= math.pi / 180
 
 # bitmask that represents whether we have wheels on x, y, z, or skew axes
-RW_AXES = np.array([0, 0, 0, 0])
-MAG_AXES = np.array([1, 1, 1])
+RW_AXES = np.array([1, 1, 1, 0])
+MAG_AXES = np.array([0, 0, 0])
 # bitmask for which axes we can rotate about
 FREEDOM_OF_MOVEMENT_AXES = np.array([1, 1, 1])
 
@@ -353,6 +353,10 @@ if (RUNNING_1D):
     FREEDOM_OF_MOVEMENT_AXES = np.array([0,0,1])
     # if true, replace proper torquer with aircore
     TEST_AIRCORE = False
+
+    # TODO: find inertia of bowling ball testbed
+    # CUBESAT_BODY_INERTIA = ???
+    # CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
 
     VELOCITY_INITIAL = np.array([0.0, 0.0, 0.0])*FREEDOM_OF_MOVEMENT_AXES
     # what magnetic moment to create along each axis (should only be 1 axis)
