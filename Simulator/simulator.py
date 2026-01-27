@@ -184,6 +184,7 @@ class Simulator():
 
         # what mode we're in for each time step
         self.mode = np.zeros((self.n))
+        self.mode[0] = PROTOCOL_MAP[STARTING_PROTOCOL]
 
         # Set the total energy to 0 at the start (joules)
         self.energy = 0
@@ -581,8 +582,10 @@ class Simulator():
             # run state through our control script to get pwm signals for motors
 
             # Get current quaternion and angular velocity of cubesat
-            quaternion = np.array(self.filtered_states[i][:4])
-            omega = np.array(self.filtered_states[i][4:])
+            # quaternion = np.array(self.filtered_states[i][:4])
+            quaternion = np.array(self.states[i-1][:4])  # Use true state for now
+            # omega = np.array(self.filtered_states[i][4:])
+            omega = np.array(self.states[i-1][4:])  # Use true state for now
 
             # Run PD controller to generate output for reaction wheels based on target orientation
             self.pwms[i] = self.controller.pid_controller(quaternion, TARGET, omega, self.pwms[i-1])

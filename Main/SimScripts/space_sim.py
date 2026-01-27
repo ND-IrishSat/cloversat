@@ -17,6 +17,7 @@ sys.path.extend([os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '
 from Simulator.simulator import Simulator
 from Simulator.sat_model import Magnetorquer_Sat
 from Simulator.magnetorquer import Magnetorquer
+from Controllers.PID_controller import PIDController
 from params import *
 
 # import PySOL in specific order
@@ -62,7 +63,9 @@ def main():
     # b body overwritten during sim initialization if CONSTANT_B_FIELD is false
     mag_sat = Magnetorquer_Sat(CUBESAT_BODY_INERTIA, mag_array, VELOCITY_INITIAL, CONSTANT_B_FIELD_MAG, np.array([0, 0, 0]), DT, GYRO_WORKING, KP, KD)
 
-    sim = Simulator(mag_sat, B_earth)
+    controller = PIDController(KP, KI, KD, DT)
+
+    sim = Simulator(mag_sat, B_earth, controller=controller)
     i = 1
 
     while i < sim.n:
@@ -72,7 +75,9 @@ def main():
         # find how far we are from nadir (for controller input)
         sim.findTrueNadir(sim.states[i-1], gps[i], i)
 
-        # Filter somewhere here
+        # Filter data to get attitude estimate
+        if RUN_UKF:
+            sim.determine_attitude(i)
 
         # check what protocol we should be in and update state
         sim.mag_sat.state = sim.check_state(i)

@@ -23,7 +23,7 @@ DEGREES = False
 
 QUAT_INITIAL = np.array([1.0, 0.0, 0.0, 0.0])
 # degrees/s. Detumbling starts at ~15 deg/s
-VELOCITY_INITIAL = np.array([15.0, 0.0, 0.0])
+VELOCITY_INITIAL = np.array([0.0, 0.0, 0.0])
 # convert to rad/s
 if not DEGREES:
     VELOCITY_INITIAL *= math.pi / 180
@@ -32,7 +32,7 @@ RW_VOLTAGES_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
 MAG_CURRENT_INITIAL = np.array([0.0, 0.0, 0.0])
 MAG_VOLTAGE_INITIAL = np.array([0.0, 0.0, 0.0])
 RW_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
-STARTING_PROTOCOL = "detumble" # "detumble", "point", "target_point", "idle"
+STARTING_PROTOCOL = "target_point" # "detumble", "point", "target_point", "idle"
 PROTOCOL_MAP = {"demagnetize": -2, "detumble": -1, "idle": 0, "point": 1, "target_point": 2}
 
 # ============  ORBITAL DYNAMICS  ==================================================
@@ -66,7 +66,7 @@ EARTH_MAGNETIC_FIELD_LEO = 30e-6  # Average magnetic flux density in LEO [T]
 
 # total time to run sim (unrounded hours)
 # HOURS = ORBITAL_PERIOD / 3600
-HOURS = 0.03
+HOURS = 0.06
 print("simulation time: ", round(HOURS, 6), "hours")
 # total time to run sim (seconds)
 TF = int(HOURS * 3600)

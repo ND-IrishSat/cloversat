@@ -2,7 +2,7 @@
 PID_controller.py
 Authors: Andrew Gaylord, Patrick Schwartz, Michael Paulucci
 
-PID controller for cubesat attitude control using quaternion error kinematics. 
+PID controller for cubesat attitude control using quaternion error kinematics.
 the PID controller computes the PWM signals to send to our reaction wheels to achieve our target orientation.
 Takes in a target quaternion, gains parameters, and current state
 
@@ -10,21 +10,13 @@ Takes in a target quaternion, gains parameters, and current state
 
 
 import numpy as np
-from UKF_algorithm import normalize
 import os
 import sys
 
 # To import module that is in the parent directory of your current module:
-# currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-# parentdir = os.path.dirname(currentdir)
-# sys.path.insert(0, parentdir) 
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-
 from params import *
-
-# MAX_PWM = 65535 # pwm val that gives max speed according to Tim
-# MAX_RW_TORQUE = .02 # Define the maximum torque your reaction wheels can handle (example: 0.01 Nm)
-# MAX_RW_TORQUE = params.MAX_RW_TORQUE # Define the maximum torque your reaction wheels can handle (example: 0.01 Nm)
+from Utils.transformations import normalize, quaternion_multiply, delta_q
 
 
 class PIDController:
@@ -109,7 +101,7 @@ class PIDController:
         # motor_torques = np.append(L, np.array([0]))
 
         # PWM calculation: Map torque to PWM values
-        max_torque = MAX_RW_TORQUE  
+        max_torque = MAX_RW_TORQUE
 
         # Map the torque output to PWM range
         pwm = (motor_torques / max_torque) * MAX_PWM
@@ -124,60 +116,6 @@ class PIDController:
 
         return pwm
 
-def delta_q(q_actual, q_target):
-    '''
-    delta_q
-        Returns error quaternion by taking quaternion product (x)
-            between actual quaternion and conjugate of target quaternion. 
-        Tells us what rotation is needed to reach target
-
-    @params
-        q_actual, q_target: normalized (unit) quaternion matrices (1 x 4) [q0, q1:3]
-    @returns
-        error quaternion: always normalized. equals [1, 0, 0, 0] when q_actual and q_target are equal
-    '''
-
-    # because we're using unit quaternions, inverse = conjugate
-    # q_actual_inverse = np.array([q_actual[0], -q_actual[1], -q_actual[2], -q_actual[3]])
-    q_target_inverse = np.array([q_target[0], -q_target[1], -q_target[2], -q_target[3]])
-
-    
-    q_error = quaternionMultiply(q_actual, q_target_inverse)
-    # q_error = quaternionMultiply(q_target, q_actual_inverse)
-
-    # since a quaternion can represent 2 relative orientations, we also want to ensure that the error quaternion is the shortest path
-    # from: Quaternion Attitude Control System of Highly Maneuverable Aircraft
-    if q_error[0] < 0:
-        # if desired rotation is > pi away, then the actual closest rotation is the inverse
-        q_error = -q_error
-    
-    # error_range = 0.1
-    # if np.linalg.norm(q_error[1:4]) < error_range:
-        # TODO: if we're close enough to the target, don't waste energy on micro movements?
-        #print("close enough")
-        # return np.array([1, 0, 0, 0])
-    # else:
-        #print("error: ", q_error)
-        # return q_error
-
-    return q_error
-
-
-def quaternionMultiply(a, b):
-    '''
-    quaternionMultiply
-        custom function to perform quaternion multiply on two passed-in matrices
-
-    @params
-        a, b: quaternion matrices (4 x 1) [q0 ; q1:3]
-    @returns
-        multiplied quaternion matrix [q0 ; q1:3]
-    '''
-
-    return np.array([a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],
-            a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2],
-            a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1],
-            a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0]])
 
 # Example usage
 if __name__ == "__main__":
@@ -221,22 +159,22 @@ if __name__ == "__main__":
 #         self.ki = ki
 #         self.kd = kd
 #         self.dt = dt
-        
+
 #         self.integral_error = np.zeros(3)
 #         self.previous_error = np.zeros(3)
 
 #     def compute_control(self, error):
 #         # Proportional term
 #         proportional = self.kp * error
-        
+
 #         # Integral term
 #         self.integral_error += error * self.dt
 #         integral = self.ki * self.integral_error
-        
+
 #         # Derivative term
 #         derivative = self.kd * (error - self.previous_error) / self.dt
 #         self.previous_error = error
-        
+
 #         # PID control output (torque command)
 #         return proportional + integral + derivative
 
@@ -249,7 +187,7 @@ if __name__ == "__main__":
 #         # Calculate the relative quaternion (q_error = q_target * q_actual_inverse)
 #         q_actual_inv = R.from_quat(q_actual).inv()
 #         q_error = R.from_quat(q_target) * q_actual_inv
-        
+
 #         # Convert quaternion error to axis-angle representation to get the rotational error
 #         axis_angle_error = q_error.as_rotvec()  # Rotation vector (3D error)
 #         return axis_angle_error
@@ -257,10 +195,10 @@ if __name__ == "__main__":
 #     def compute_pwm(self, q_target, q_actual):
 #         # Step 1: Compute the quaternion error
 #         error = self.quaternion_error(q_target, q_actual)
-        
+
 #         # Step 2: Compute the control output (torque) using PID controller
 #         control_output = self.pid.compute_control(error)
-        
+
 #         # Step 3: Map the control output (torque) to PWM signals for the reaction wheels
 #         pwm_signal = self.torque_to_pwm(control_output)
 #         return pwm_signal
@@ -280,7 +218,7 @@ if __name__ == "__main__":
 #         W =  [[1, 0, 0, alpha],
 #                 [0, 1, 0, beta],
 #                 [0, 0, 1, gamma]]
-        
+
 #         # normalizing scalar
 #         n = (1 + alpha**2 + beta**2 + gamma**2)
 
@@ -289,7 +227,7 @@ if __name__ == "__main__":
 #                 [-alpha*beta, (1 + alpha**2 + gamma**2), -beta*gamma],
 #                 [alpha*gamma, -beta*gamma, (1 + beta**2 + beta**2)],
 #                 [alpha, beta, gamma]])/n
-        
+
 #         # convert output for 3 rx wheels to 4
 #         pwms = np.matmul(W_inv,pwms)
 
