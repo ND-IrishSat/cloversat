@@ -1,6 +1,6 @@
 '''
 space_sim.py
-Authors: Andrew Gaylord, Michael Paulucci, Sarah Kopfer, Lauren, Kris, Rene Alzina
+Authors: Andrew Gaylord, Michael Paulucci, Sarah Kopfer, Lauren, Kris, Rene Alzina, Rawan, Abe, Daniel
 
 Main process that calls functions from simulator.py and generates pdf report of results
 
@@ -27,12 +27,12 @@ from Simulator.PySOL.sol_sim import *
 # import Simulator.PySOL.orb_tools as ot
 
 def main():
-    if RUNNING_1D or ADCS_TYPE == "AD" or RUNNING_MAYA:
+    if ADCS_TYPE == "AD" or RUNNING_MAYA:
         print("ERROR: set params correctly")
         return 1
 
     # earth magnetic field data (microTeslas)
-    B_earth = None
+    B_earth = CONSTANT_B_FIELD_MAG
 
     if not CONSTANT_B_FIELD:
 
@@ -72,8 +72,9 @@ def main():
         # generate fake sensor data in body frame based on last state
         sim.generateData_step(sim.states[i-1], i)
 
-        # find how far we are from nadir (for controller input)
-        sim.findTrueNadir(sim.states[i-1], gps[i], i)
+        if not CONSTANT_B_FIELD:
+            # find how far we are from nadir (for controller input)
+            sim.findTrueNadir(sim.states[i-1], gps[i], i)
 
         # Filter data to get attitude estimate
         if RUN_UKF:

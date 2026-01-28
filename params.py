@@ -89,7 +89,7 @@ STATE_SPACE_DIMENSION = 7
 MEASUREMENT_SPACE_DIMENSION = 6
 
 # whether to generate new pySOL data or not
-GENERATE_NEW = False
+GENERATE_NEW = True
 # csv to get pre-generated pysol b field from
 B_FIELD_CSV_FILE = "leo_oe_10.csv"
 # B_FIELD_CSV_FILE = "1_and_half_orbit.csv" # .05 timestep
@@ -97,7 +97,7 @@ B_FIELD_CSV_FILE = "leo_oe_10.csv"
 # B_FIELD_CSV_FILE = "1_orbit.csv" # .1 timestep
 
 # if false, use PySOL to calculate orbital magnetic field
-CONSTANT_B_FIELD = False
+CONSTANT_B_FIELD = True
 SENSOR_NOISE = True
 STANDSTILL = False # keep satellite in same position around the earth
 
