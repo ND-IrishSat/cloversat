@@ -1,0 +1,14 @@
+numpy==2.2.6 # 1.x is required by something here
+pandas==2.3.1
+matplotlib==3.10.3
+scipy==1.16.0
+PyOpenGL==3.1.9
+pygame==2.6.1
+pillow==11.3.0
+fpdf==1.7.2
+geodatasets==2024.8.0
+geopandas==1.1.1
+pyquaternion==0.9.9
+opencv-python==4.12.0.88
+astropy==7.1.0 # used to be 5.3.4
+h5py==3.14.0
