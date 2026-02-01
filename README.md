@@ -18,13 +18,13 @@ Members: instead of working on main, make sure to create a feature-branch and pu
 
 * HardwareInterface: contains all scripts that interface with physical components of the cubesat, such as imu, hall sensors, and reaction wheel motors.
 
-* Simulator: helper files that allow us to simulate our orbit (PySOL library), prpogate the sim and store the data (`simulator.py`), generate a PDF report with graphs + info, and visualize cubesat in 3D.
+* Simulator: helper files that allow us to simulate our orbit (PySOL library), prpogate the sim and store the data (`simulator.py`), generate a PDF report with graphs + info, and visualize cubesat in 3D. See `Simulator/README.md` for more info.
 
 * Utils: functions used everywhere (like speed tests, conversions, etc)
 
 * Maya_project: integrates our simulator with Maya (3D modelling software found on Debart computers)
 
-`Params.py`: holds all global constants/parameters/design specifications/starting states in one place.
+`Params.py`: holds all global constants/parameters/design specifications/starting states in one place. See `Simulator/README.md` for more info.
 
 ## Setup
 
