@@ -1,6 +1,6 @@
 # CloverSat Computing Projects
 
-Collaborative base for developing CloverSat's Attitude Determination and Control System (ADCS), which include a Proportional-Integral-Derivative (PID) Controller and Unscented Kalman Filter (UKF) for state estimation.
+Collaborative codebase for developing CloverSat's Attitude Determination and Control System (ADCS), which include a Proportional-Integral-Derivative (PID) Controller and Unscented Kalman Filter (UKF) for state estimation.
 
 Also contains extensive simulation capabilities, including sensor modeling, orbital dynamics, 3D visualization, and performance report generation.
 
