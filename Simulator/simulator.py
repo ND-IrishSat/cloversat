@@ -385,6 +385,8 @@ class Simulator():
         Populates self.filtered_states[i]
 
         TODO: check i indices (where in the process is this done)
+        TODO: ensure only data from mag_sat is passed to kalmanMethod (and store current filtered_state in mag_sat?)
+        TODO: don't pass b_true, pass GPS instead. Add GPS generation to generateData_step too?
         '''
         start = time.time()
 

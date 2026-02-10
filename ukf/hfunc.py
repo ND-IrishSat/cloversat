@@ -25,7 +25,7 @@ def hfunc(state, Bfield):
 
     @params
         state: state estimate of system-quaternion, angular velocity, reaction wheel speed (1 x n)
-        Bfield: B field of state (1 x 3) in microteslas???
+        Bfield: B field in ECI frame of earth (1 x 3) (microteslas)
             used to be controls: gps and time data needed to calculate magnetic field with respect to the earth
             (latitude, longitude, height, time arrays)
             but now we calculate that separately
@@ -39,6 +39,9 @@ def hfunc(state, Bfield):
     rotationMatrix = quaternion_rotation_matrix(quaternion)
 
     # should we normalize?
+
+    # TODO: Get b_earth from GPS, then cross with magnetometer data (b_body). Then convert 3d vector to quaternion
+    # Need to go from simulation-aware to flight software aware
 
     # combine rotation matrix and b field of earth
     # other elements of state have 1 to 1 conversion, so add back before returning
