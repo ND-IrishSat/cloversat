@@ -1,0 +1,93 @@
+#Reaction wheels
+
+import time
+import pigpio
+
+'''
+3 input pins:
+    dir: 1/0 for cloclwise/counterclockwise
+    br: breaking while high
+    PWM: motor strength
+Output: 
+    Freq: hall sensor output--high every time wheel rotates
+'''
+
+DAA = 17
+COMU = 24
+FREQ = 27
+PWM = 12 # PWM input signal
+BR = 23 # BR is for brake control
+
+# motor class!
+class ReactionWheel:
+     #initializing the class
+
+    def __init__(self, pi, daa, comu, freq, pwm, br, dire):
+        self.pi = pi
+        self.daa = daa
+        self.comu = comu
+        self.freq = freq
+        self.pwm = pwm
+        self.br = br
+        self.dire = dire
+        self.position = 0
+        self.rpm = 0.0 #revolutions per minute
+        self._setup_()
+        
+    def _setup_(self):
+        #input pins to the pi
+        pi.set_mode(self.freq, pigpio.INPUT)
+        
+        #output pins from the PI to the wheels pi. set_mode(self.pwm, pigpio.OUTPUT)
+        pi.set_mode(self.pwm, pigpio.OUTPUT)
+        pi.set_mode(self.daa, pigpio.OUTPUT)
+        pi.set_mode(self.comu, pigpio.OUTPUT)
+        pi.set_mode(self.br, pigpio.OUTPUT)
+        pi.set_mode(self.dire, pigpio.OUTPUT)
+
+        #initial state
+        self.pi.write(self.br, 0)
+        #when 0 its clockwise
+        self.pi.write(self.dire, 0)
+        self.pi.write(self.daa, 0)
+        self.pi.write(self.comu, 0)
+
+        #functions below for setting pwm , br, and dire
+        self.pi.set_PWM_frequency(self.pwm, 20000) #built in from the pigpio library, in hz
+        self.pi.set_PWM_dutycycle(self.pwm, 0)
+
+    def _set_speed_(self, duty_0_255: int): #duty call goes from 0 to 255
+        
+        if (duty_0_255 < 0): self.dire = 1
+        
+        duty = max(0, min(255, int(duty_0_255)))
+        self.pi.set_PWM_dutycycle(self.pwm , duty)
+
+    def slow_down(self, total_time=1.0, final_stop_condition = False):
+        current_PWM = self.pi.get_PWM_dutycycle(self.pwm)
+        if current_PWM <= 0:
+            if  final_stop_condition:
+                self.pi.write(self.br, 1)
+            return
+
+        time_increment = 60
+        delay = total_time / time_increment
+        step = max(1, int(current_PWM / time_increment))  # depends on current PWM
+
+        self.pi.write(self.br, 0)  # release brake during ramp
+        duty = current_PWM
+        while duty > 0:
+            duty = max(0, duty - step)
+            self.pi.set_PWM_dutycycle(self.pwm, duty)
+            time.sleep(delay)
+
+        if brake_at_end:
+            self.pi.write(self.br, 1)
+
+
+    
+    def kill(self):
+        self.pi.set_PWM_dutycycle(self.pwm, 0)
+        self.pi.write(self.br, 1)
+    
+
