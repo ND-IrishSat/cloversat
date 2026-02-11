@@ -94,6 +94,22 @@ class ReactionWheel:
     def getPWMFrequency(self):
         return self.pi.get_PWM_frequency(self.pwm) 
     
+    def ramp_to(self, target_duty, ramp_time=2.0):
+        target = min(255, abs(target_duty))
+        steps = 100
+        delay = ramp_time / steps
+
+        self.pi.write(self.dire, 0 if target_duty >= 0 else 1)
+        self.pi.write(self.br, 0)
+
+        for duty in range(0, target + 1):
+            self.pi.hardware_PWM(
+                self.pwm,
+                20000,
+                duty * 1_000_000 // 255
+            )
+            time.sleep(delay)
+    
     def kill(self):
         self.pi.hardware_PWM(self.pwm, 20000, 0)
         self.pi.write(self.br, 1)
@@ -101,23 +117,7 @@ class ReactionWheel:
 #stop and close functions
 pi = pigpio.pi()
 wheel = ReactionWheel(pi, DAA, COMU, FREQ, PWM, BR, DIRE)
-wheel._set_speed_(10)
-time.sleep(1.4)
-wheel._set_speed_(30)
-time.sleep(1.4)
-wheel._set_speed_(50)
-time.sleep(1.4)
-wheel._set_speed_(70)
-time.sleep(1.4)
-wheel._set_speed_(100)
-time.sleep(1.4)
-wheel._set_speed_(150)
-time.sleep(1.4)
-wheel._set_speed_(200)
-
-
-
-i = 0
+wheel.ramp_to(200)
 for i in range(1,20):
     print(wheel.getPWMFrequency())
     time.sleep(2)
