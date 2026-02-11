@@ -101,7 +101,7 @@ class ReactionWheel:
 #stop and close functions
 pi = pigpio.pi()
 wheel = ReactionWheel(pi, DAA, COMU, FREQ, PWM, BR, DIRE)
-wheel.ramp_to(200)
+wheel._set_speed_(200)
 for i in range(1,20):
     print(wheel.getPWMFrequency())
     time.sleep(2)
