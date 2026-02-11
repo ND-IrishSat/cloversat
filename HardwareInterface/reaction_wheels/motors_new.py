@@ -57,6 +57,7 @@ class ReactionWheel:
 
         # Initialize hardware PWM OFF
         self.pi.hardware_PWM(self.pwm, 20000, 0)
+        time.sleep(0.1)
 
     def _set_speed_(self, duty_0_255: int): #duty call goes from 0 to 255
         
@@ -100,7 +101,22 @@ class ReactionWheel:
 #stop and close functions
 pi = pigpio.pi()
 wheel = ReactionWheel(pi, DAA, COMU, FREQ, PWM, BR, DIRE)
+wheel._set_speed_(10)
+time.sleep(1.4)
+wheel._set_speed_(30)
+time.sleep(1.4)
+wheel._set_speed_(50)
+time.sleep(1.4)
+wheel._set_speed_(70)
+time.sleep(1.4)
+wheel._set_speed_(100)
+time.sleep(1.4)
+wheel._set_speed_(150)
+time.sleep(1.4)
 wheel._set_speed_(200)
+
+
+
 i = 0
 for i in range(1,20):
     print(wheel.getPWMFrequency())
