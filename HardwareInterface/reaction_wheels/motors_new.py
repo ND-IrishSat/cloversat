@@ -59,6 +59,7 @@ class ReactionWheel:
 
         # Initialize hardware PWM OFF
         self.pi.hardware_PWM(self.pwm, 20000, 0)
+        time.sleep(0.1)
 
     def _set_speed_(self, duty_0_255: int): #duty call goes from 0 to 255
 
