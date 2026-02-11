@@ -66,7 +66,7 @@ EARTH_MAGNETIC_FIELD_LEO = 30e-6  # Average magnetic flux density in LEO [T]
 
 # total time to run sim (unrounded hours)
 # HOURS = ORBITAL_PERIOD / 3600
-HOURS = 0.06
+HOURS = 0.03
 print("simulation time: ", round(HOURS, 6), "hours")
 # total time to run sim (seconds)
 TF = int(HOURS * 3600)
@@ -80,10 +80,10 @@ if not DEGREES:
     DETUMBLE_THRESHOLD *= math.pi / 180
 
 # bitmask that represents whether we have wheels on x, y, z, or skew axes
-RW_AXES = np.array([1, 1, 1, 0])
+RW_AXES = np.array([1, 0, 0, 0])
 MAG_AXES = np.array([0, 0, 0])
 # bitmask for which axes we can rotate about
-FREEDOM_OF_MOVEMENT_AXES = np.array([1, 1, 1])
+FREEDOM_OF_MOVEMENT_AXES = np.array([0, 0, 0])
 
 STATE_SPACE_DIMENSION = 7
 MEASUREMENT_SPACE_DIMENSION = 6
@@ -200,7 +200,7 @@ TRANSFORMATION = np.array([[1, 0, 0, 1/np.sqrt(3)],
 # =======  CONTROLS  =======================================
 
 # target orientation for if we're simulating controls
-TARGET = np.array([1.0, 0.0, 1.0, 0.0])
+TARGET = np.array([1.0, 1.0, 0.0, 0.0])
 
 # Quaternion error tolerances define how close we need to be to our target orientation
 QUAT_ERROR_TOLERANCE = 0.01  # Maximum acceptable quaternion error magnitude
@@ -346,9 +346,9 @@ FERRO_MAX_MAGNETIC_MOMENT = FERRO_NUM_TURNS * FERRO_AREA * MAX_CURRENT_MAG * FER
 # =======  SIMPLE 1D TEST  =================================================
 
 if (RUNNING_1D):
+    DETUMBLE_1D = False
+    GUI_ON = False
 
-    # bitmask that represents which axis our torquer is mounted upon
-    MAG_AXES = np.array([1,1,1])
     # bitmask for orientation of table: only movement along z axis should be allowed
     FREEDOM_OF_MOVEMENT_AXES = np.array([0,0,1])
     # if true, replace proper torquer with aircore
@@ -368,8 +368,7 @@ if (RUNNING_1D):
     DESIRED_ANGLE = np.array([-90, 0, 0]) # desired angle for x axis
 
     # ==========  1D DETUMBLE/GUI  =====================================
-    DETUMBLE_1D = True
-    GUI_ON = True
+
 
     if DETUMBLE_1D and not GUI_ON:
         VELOCITY_INITIAL = np.array([0.0, 0.0, 20.0])

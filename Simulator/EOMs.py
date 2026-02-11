@@ -69,6 +69,13 @@ def eoms(quaternion: np.ndarray, w_sat: np.ndarray, w_rw: np.ndarray, tau_sat: n
     #       Cross product term accounts for change in coordinate frame of body relative to inertial frame
     # Reaction wheel torque and angular momentum are multiplied by TRANSFORMATION to convert from 4 to 3 axes
     w_sat_dot = np.matmul( CUBESAT_BODY_INERTIA_INVERSE, (tau_sat - np.matmul(TRANSFORMATION, rw_torque_body) - np.cross(w_sat, np.matmul(I_body, w_sat) + np.matmul(TRANSFORMATION, rw_angular_momentum_body))))
+
+    if RUNNING_1D:
+        w_sat_dot = w_sat_dot - 0.0041 * w_sat
+        # For the 1D test, constrain the dot to one axis (x) while conserving momentum
+        magnitude = math.sqrt(w_sat_dot[0]**2 + w_sat_dot[1]**2 + w_sat_dot[2]**2)
+        w_sat_dot = np.array([np.sign(w_sat_dot[0]) * magnitude, 0.0, 0.0])
+    
     # NOTE: total vel magnitude steadily increases over time due to euler's method (i think). Smaller timestep = less increase
     # NOTE: equivalent to multiply by w_skew_matrix instead of taking cross product
     # w_skew_matrix = np.array([[0, -w_z, w_y],
