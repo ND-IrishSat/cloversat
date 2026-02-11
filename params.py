@@ -355,6 +355,12 @@ if (RUNNING_1D):
     TEST_AIRCORE = False
 
     # TODO: find inertia of bowling ball testbed
+    #inertia of bowling ball testbed in (the np array is in kg m^2)
+    TESTBED_INERTIA = (0.00029263965) * np.array([[-0.41, 0.00, 0.91, 
+                                                   0.91, 0.00, 0.41, 
+                                                  0.00, 1.00, 0.00]])
+    
+    
     # CUBESAT_BODY_INERTIA = ???
     # CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
 
