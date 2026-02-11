@@ -67,7 +67,7 @@ class ReactionWheel:
             self.pi.write(self.dire, 0)
         
         self.pi.write(self.br, 0)
-        duty = max(0, min(255, int(duty_0_255)))
+        duty = max(0, min(255, int(abs(duty_0_255))))
         self.pi.set_PWM_dutycycle(self.pwm , duty)
     
     def slow_down(self, total_time=1.0, final_stop_condition = False):
