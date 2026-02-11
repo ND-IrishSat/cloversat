@@ -19,6 +19,8 @@ PWM = 12 # PWM input signal
 BR = 23 # BR is for brake control
 DIRE = 22 # direction control
 
+NUMBER_POLE_PAIRS = 4
+
 # motor class!
 class ReactionWheel:
      #initializing the class
@@ -59,8 +61,12 @@ class ReactionWheel:
 
     def _set_speed_(self, duty_0_255: int): #duty call goes from 0 to 255
         
-        if (duty_0_255 < 0): self.dire = 1
+        if (duty_0_255 < 0):
+            self.pi.write(self.dire, 1)
+        else:
+            self.pi.write(self.dire, 0)
         
+        self.pi.write(self.br, 0)
         duty = max(0, min(255, int(duty_0_255)))
         self.pi.set_PWM_dutycycle(self.pwm , duty)
     
@@ -85,6 +91,9 @@ class ReactionWheel:
         if final_stop_condition:
             self.pi.write(self.br, 1)
 
+    def getPWMFrequency(self):
+        return self.pi.get_PWM_frequency(self.pwm) * 60 / NUMBER_POLE_PAIRS 
+    
     def kill(self):
         self.pi.set_PWM_dutycycle(self.pwm, 0)
         self.pi.write(self.br, 1)
@@ -92,4 +101,5 @@ class ReactionWheel:
 #stop and close functions
 pi = pigpio.pi()
 wheel = ReactionWheel(pi, DAA, COMU, FREQ, PWM, BR, DIRE)
-wheel._set_speed_(20)
+wheel._set_speed_(200)
+time.sleep(5)
