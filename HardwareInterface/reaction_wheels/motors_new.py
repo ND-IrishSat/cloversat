@@ -94,7 +94,7 @@ class ReactionWheel:
         return self.pi.get_PWM_frequency(self.pwm) 
     
     def kill(self):
-        self.pi.set_PWM_dutycycle(self.pwm, 0)
+        self.pi.hardware_PWM(self.pwm, 20000, 0)
         self.pi.write(self.br, 1)
     
 #stop and close functions
@@ -103,6 +103,7 @@ wheel = ReactionWheel(pi, DAA, COMU, FREQ, PWM, BR, DIRE)
 wheel._set_speed_(200)
 i = 0
 for i in range(1,20):
-    time.sleep(5)
+    print(wheel.getPWMFrequency())
+    time.sleep(2)
 
 wheel.kill()
