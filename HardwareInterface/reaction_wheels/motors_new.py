@@ -17,6 +17,7 @@ COMU = 24
 FREQ = 27
 PWM = 12 # PWM input signal
 BR = 23 # BR is for brake control
+DIRE = 22 # direction control
 
 # motor class!
 class ReactionWheel:
@@ -89,6 +90,6 @@ class ReactionWheel:
         self.pi.write(self.br, 1)
     
 #stop and close functions
-    pi = pigpio.pi()
-    wheel = ReactionWheel(pi, DAA, COMU, FREQ, PWM, BR, DIRE)
-    wheel._set_speed_(20)
+pi = pigpio.pi()
+wheel = ReactionWheel(pi, DAA, COMU, FREQ, PWM, BR, DIRE)
+wheel._set_speed_(20)
