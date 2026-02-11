@@ -39,14 +39,14 @@ class ReactionWheel:
         
     def _setup_(self):
         #input pins to the pi
-        pi.set_mode(self.freq, pigpio.INPUT)
+        self.pi.set_mode(self.freq, pigpio.INPUT)
         
         #output pins from the PI to the wheels pi. set_mode(self.pwm, pigpio.OUTPUT)
-        pi.set_mode(self.pwm, pigpio.OUTPUT)
-        pi.set_mode(self.daa, pigpio.OUTPUT)
-        pi.set_mode(self.comu, pigpio.OUTPUT)
-        pi.set_mode(self.br, pigpio.OUTPUT)
-        pi.set_mode(self.dire, pigpio.OUTPUT)
+        self.pi.set_mode(self.pwm, pigpio.OUTPUT)
+        self.pi.set_mode(self.daa, pigpio.OUTPUT)
+        self.pi.set_mode(self.comu, pigpio.OUTPUT)
+        self.pi.set_mode(self.br, pigpio.OUTPUT)
+        self.pi.set_mode(self.dire, pigpio.OUTPUT)
 
         #initial state
         self.pi.write(self.br, 0)
