@@ -8,7 +8,7 @@ import pigpio
     dir: 1/0 for cloclwise/counterclockwise
     br: breaking while high
     PWM: motor strength
-Output: 
+Output:
     Freq: hall sensor output--high every time wheel rotates
 '''
 
@@ -34,13 +34,15 @@ class ReactionWheel:
         self.br = br
         self.dire = dire
         self.position = 0
+        self.last_tick = None
+        self.callback = None
         self.rpm = 0.0 #revolutions per minute
         self._setup_()
-        
+
     def _setup_(self):
         #input pins to the pi
         self.pi.set_mode(self.freq, pigpio.INPUT)
-        
+
         #output pins from the PI to the wheels pi. set_mode(self.pwm, pigpio.OUTPUT)
         self.pi.set_mode(self.pwm, pigpio.OUTPUT)
         self.pi.set_mode(self.daa, pigpio.OUTPUT)
@@ -59,16 +61,16 @@ class ReactionWheel:
         self.pi.hardware_PWM(self.pwm, 20000, 0)
 
     def _set_speed_(self, duty_0_255: int): #duty call goes from 0 to 255
-        
+
         if (duty_0_255 < 0):
             self.pi.write(self.dire, 1)
         else:
             self.pi.write(self.dire, 0)
-        
+
         self.pi.write(self.br, 0)
         duty = max(0, min(255, int(abs(duty_0_255))))
         self.pi.hardware_PWM(self.pwm, 20000, duty * 1_000_000 // 255)
-    
+
     def slow_down(self, total_time=1.0, final_stop_condition = False):
         current_PWM = self.pi.get_PWM_dutycycle(self.pwm)
         if current_PWM <= 0:
@@ -91,19 +93,50 @@ class ReactionWheel:
             self.pi.write(self.br, 1)
 
     def getPWMFrequency(self):
-        return self.pi.get_PWM_frequency(self.pwm) 
-    
+        return self.pi.get_PWM_frequency(self.pwm)
+
     def kill(self):
+        self.callback.cancel()
         self.pi.hardware_PWM(self.pwm, 20000, 0)
         self.pi.write(self.br, 1)
-    
-#stop and close functions
-pi = pigpio.pi()
-wheel = ReactionWheel(pi, DAA, COMU, FREQ, PWM, BR, DIRE)
-wheel._set_speed_(200)
-i = 0
-for i in range(1,20):
-    print(wheel.getPWMFrequency())
-    time.sleep(2)
 
-wheel.kill()
+    def get_rpm_callback(self, gpio, level, tick):
+        """
+        Called on each rising edge of FREQ.
+        tick is in microseconds (pigpio's internal time base).
+        """
+        if level != 1:
+            return
+
+        if self.last_tick is None:
+            self.last_tick = tick
+            return
+
+        # pigpio.tickDiff handles wrap-around safely
+        interval_us = pigpio.tickDiff(self.last_tick, tick)
+        self.last_tick = tick
+
+        if interval_us > 0:
+            frequency_hz = 1_000_000.0 / interval_us
+            self.rpm = (frequency_hz * 60.0) / NUMBER_POLE_PAIRS
+
+
+if __name__ == '__main__':
+    #stop and close functions
+    pi = pigpio.pi()
+    if not pi.connected:
+        raise RuntimeError("pigpio daemon not running. Start with: sudo systemctl start pigpiod")
+
+    wheel = ReactionWheel(pi, DAA, COMU, FREQ, PWM, BR, DIRE)
+
+    # Keep checking freq in the background
+    wheel.callback = pi.callback(FREQ, pigpio.RISING_EDGE, wheel.get_rpm_callback)
+
+    wheel._set_speed_(200)
+    for i in range(15):
+        print(wheel.getPWMFrequency())
+        print(f"RPM: {wheel.rpm:.2f}")
+        time.sleep(2)
+
+    wheel.kill()
+    pi.stop()
