@@ -55,9 +55,8 @@ class ReactionWheel:
         self.pi.write(self.daa, 0)
         self.pi.write(self.comu, 0)
 
-        #functions below for setting pwm , br, and dire
-        self.pi.set_PWM_frequency(self.pwm, 5000) #built in from the pigpio library, in hz
-        self.pi.set_PWM_dutycycle(self.pwm, 0)
+        # Initialize hardware PWM OFF
+        self.pi.hardware_PWM(self.pwm, 20000, 0)
 
     def _set_speed_(self, duty_0_255: int): #duty call goes from 0 to 255
         
