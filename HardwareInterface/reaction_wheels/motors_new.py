@@ -62,7 +62,7 @@ class ReactionWheel:
         
         duty = max(0, min(255, int(duty_0_255)))
         self.pi.set_PWM_dutycycle(self.pwm , duty)
-
+    
     def slow_down(self, total_time=1.0, final_stop_condition = False):
         current_PWM = self.pi.get_PWM_dutycycle(self.pwm)
         if current_PWM <= 0:
@@ -81,13 +81,14 @@ class ReactionWheel:
             self.pi.set_PWM_dutycycle(self.pwm, duty)
             time.sleep(delay)
 
-        if brake_at_end:
+        if final_stop_condition:
             self.pi.write(self.br, 1)
 
-
-    
     def kill(self):
         self.pi.set_PWM_dutycycle(self.pwm, 0)
         self.pi.write(self.br, 1)
     
-
+#stop and close functions
+    pi = pigpio.pi()
+    wheel = ReactionWheel(pi, DAA, COMU, FREQ, PWM, BR, DIRE)
+    wheel._set_speed_(20)
