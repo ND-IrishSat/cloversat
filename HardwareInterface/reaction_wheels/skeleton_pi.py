@@ -18,7 +18,7 @@ PWM_PIN = 12       # MUST be 12, 13, 18, or 19 for hardware_PWM
 BR_PIN = 23        # brake (active high)
 DIR_PIN = 22       # direction (0/1)
 
-PWM_FREQ_HZ = 20_000
+PWM_FREQ_HZ = 50_000
 NUMBER_POLE_PAIRS = 4
 
 
@@ -55,6 +55,11 @@ class RpmCounter:
         self._cb = pi.callback(fg_pin, pigpio.RISING_EDGE, self._cb_func)
 
     def _cb_func(self, gpio, level, tick):
+        # pigpio uses special "TIMEOUT" level when watchdog triggers
+        if level == pigpio.TIMEOUT:
+            self.rpm = 0.0
+            self._last_tick = None
+            return
         if level != 1:
             return
         if self._last_tick is None:
@@ -82,6 +87,7 @@ def main():
         pi.set_mode(pin, pigpio.OUTPUT)
     pi.set_mode(FREQ_PIN, pigpio.INPUT)
     pi.set_pull_up_down(FREQ_PIN, pigpio.PUD_UP)  # hall often open-collector
+    pi.set_glitch_filter(FREQ_PIN, 200)  # ignore pulses shorter than 200 µs
 
     # Initial states
     pi.write(BR_PIN, 0)
@@ -94,6 +100,7 @@ def main():
     time.sleep(10)
 
     rpm_counter = RpmCounter(pi, FREQ_PIN, NUMBER_POLE_PAIRS)
+    pi.set_watchdog(FREQ_PIN, 250)  # TIMEOUT if no edge for 250 ms (~60 RPM threshold)
 
     try:
         # Mirror the Arduino sweep: PWM 63..255 in steps of 64
