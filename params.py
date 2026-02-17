@@ -32,7 +32,7 @@ RW_VOLTAGES_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
 MAG_CURRENT_INITIAL = np.array([0.0, 0.0, 0.0])
 MAG_VOLTAGE_INITIAL = np.array([0.0, 0.0, 0.0])
 RW_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
-STARTING_PROTOCOL = "target_point" # "detumble", "point", "target_point", "idle"
+STARTING_PROTOCOL = "idle" # "detumble", "point", "target_point", "idle"
 PROTOCOL_MAP = {"demagnetize": -2, "detumble": -1, "idle": 0, "point": 1, "target_point": 2}
 
 # ============  ORBITAL DYNAMICS  ==================================================
@@ -80,7 +80,7 @@ if not DEGREES:
     DETUMBLE_THRESHOLD *= math.pi / 180
 
 # bitmask that represents whether we have wheels on x, y, z, or skew axes
-RW_AXES = np.array([1, 0, 0, 0])
+RW_AXES = np.array([1, 1, 1, 0])
 MAG_AXES = np.array([0, 0, 0])
 # bitmask for which axes we can rotate about
 FREEDOM_OF_MOVEMENT_AXES = np.array([0, 0, 0])
@@ -115,7 +115,7 @@ NADIR_INTERVAL = 2.0
 # Whether to run our unscented kalman filter or not
 RUN_UKF = False
 # for simple 1D testbed validation (with a suboption for detumble)
-RUNNING_1D = False
+RUNNING_1D = True
 # whether you're running in Debart with 3D rendering (check 3D settings at bottom if so)
 RUNNING_MAYA = False
 # 0 = only create pdf output, 1 = show 3D animation visualization, 2 = both, 3 = none
@@ -200,7 +200,7 @@ TRANSFORMATION = np.array([[1, 0, 0, 1/np.sqrt(3)],
 # =======  CONTROLS  =======================================
 
 # target orientation for if we're simulating controls
-TARGET = np.array([1.0, 1.0, 0.0, 0.0])
+TARGET = np.array([1.0, 0.0, 1.0, 0.0])
 
 # Quaternion error tolerances define how close we need to be to our target orientation
 QUAT_ERROR_TOLERANCE = 0.01  # Maximum acceptable quaternion error magnitude
@@ -349,8 +349,10 @@ if (RUNNING_1D):
     DETUMBLE_1D = False
     GUI_ON = False
 
-    # bitmask for orientation of table: only movement along z axis should be allowed
-    FREEDOM_OF_MOVEMENT_AXES = np.array([0,0,1])
+    # In EOMs, the velocity is constrained to the z axis only
+    # Also, only simulate the z-axis reaction wheel
+    RW_AXES = np.array([0, 0, 1, 0])
+
     # if true, replace proper torquer with aircore
     TEST_AIRCORE = False
 
@@ -359,12 +361,23 @@ if (RUNNING_1D):
     TESTBED_INERTIA = (0.00029263965) * np.array([[-0.41, 0.00, 0.91, 
                                                    0.91, 0.00, 0.41, 
                                                   0.00, 1.00, 0.00]])
+    print(TESTBED_INERTIA)
     
     
     # CUBESAT_BODY_INERTIA = ???
     # CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
 
-    VELOCITY_INITIAL = np.array([0.0, 0.0, 0.0])*FREEDOM_OF_MOVEMENT_AXES
+    # The next four parameters are only here for convenience, they just reset
+    # the earlier values in the code
+    # Important: Only set initial velocity in the z-axis
+    VELOCITY_INITIAL = np.array([0.0, 0.0, 3.0])
+    # Set initial angle, again only set angles about the z-axis
+    QUAT_INITIAL = np.array([1.0, 0.0, 0.0, 0.0])
+    # Set the target quaternion for if we are in target_point mode, only z-axis angles
+    TARGET = np.array([1.0, 0.0, 0.0, 1.0])
+    # Control mode
+    STARTING_PROTOCOL = "target_point" # "detumble", "point", "target_point", "idle"
+
     # what magnetic moment to create along each axis (should only be 1 axis)
     if TEST_AIRCORE:
         #using maxing to return an array
@@ -390,15 +403,15 @@ if (RUNNING_1D):
         gui.velocity = float(gui.velocity)
         if (gui.axes == "x"):
             MAG_AXES = np.array([1,0,0])
-       # VELOCITY_INITIAL = np.array([gui.velocity, 0.0, 0.0])*FREEDOM_OF_MOVEMENT_AXES
+            VELOCITY_INITIAL = np.array([gui.velocity, 0.0, 0.0])
 
         elif (gui.axes == "y"):
             MAG_AXES = np.array([0,1,0])
-        #VELOCITY_INITIAL = np.array([0.0, gui.velocity, 0.0])
+            VELOCITY_INITIAL = np.array([0.0, gui.velocity, 0.0])
 
         else:
             MAG_AXES = np.array([0,0,1])
-        VELOCITY_INITIAL = np.multiply(np.array([0.0, 0.0, gui.velocity]),FREEDOM_OF_MOVEMENT_AXES)
+            VELOCITY_INITIAL = np.array([0.0, 0.0, gui.velocity])
         gui.time = float(gui.time)
         HOURS = gui.time / 3600 # simulation time in hours
         print(gui.time,gui.velocity,gui.axes)
@@ -419,6 +432,7 @@ if (RUNNING_1D):
     if not DEGREES:
         VELOCITY_INITIAL *= math.pi / 180
         DETUMBLE_THRESHOLD_1D *= math.pi / 180
+        
 
 # ================  3D OPTIONS  ======================================================
 

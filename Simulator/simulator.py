@@ -432,7 +432,7 @@ class Simulator():
                 # otherwise, update time since we've taken reading
                 # print(i, " mags on", self.magnetometerReadingTimer * self.dt, ", ", self.torquersOffTimer * self.dt)
                 self.magnetometerReadingTimer += 1.0
-
+        '''
         if RUNNING_1D and not DETUMBLE_1D:
             # extract current quaternion and convert to euler angles
             q = self.states[i - 1][:4]
@@ -444,8 +444,8 @@ class Simulator():
                     print("REACHED DESIRED ANGLE OF 90")
                     self.finishedTime = i*self.dt
                     print("Time needed is " + str(self.finishedTime))
-
-        elif self.mag_sat.state == "detumble":
+        '''
+        if self.mag_sat.state == "detumble":
             # threshold 0.5-1 degress per second per axis
             thresholdLow = 0
             if RUNNING_1D and DETUMBLE_1D:
@@ -532,15 +532,15 @@ class Simulator():
             self.mode[i] = PROTOCOL_MAP['demagnetize']
             self.errorQuats[i] = self.errorQuats[i - 1]
             self.nadirError[i] = self.nadirError[i - 1]
-
+        '''
         elif RUNNING_1D and not DETUMBLE_1D:
 
             # for 1D test, use simple custom controller
             self.mag_voltages[i] = maxPowerController(DESIRED_MAGNETIC_MOMENTS, self.mag_sat)
             self.mag_voltages[i] = np.clip(self.mag_voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
             self.mode[i] = PROTOCOL_MAP['detumble']
-
-        elif self.mag_sat.state == "detumble":
+        '''
+        if self.mag_sat.state == "detumble":
 
             # if running b-dot instead of b-cross, don't run until we have proper data
             if GYRO_WORKING or len(self.mag_sat.prevB) >= MAG_READINGS_STORED:
