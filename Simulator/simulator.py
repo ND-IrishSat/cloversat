@@ -432,8 +432,8 @@ class Simulator():
                 # otherwise, update time since we've taken reading
                 # print(i, " mags on", self.magnetometerReadingTimer * self.dt, ", ", self.torquersOffTimer * self.dt)
                 self.magnetometerReadingTimer += 1.0
-        '''
-        if RUNNING_1D and not DETUMBLE_1D:
+
+        if RUNNING_1D:
             # extract current quaternion and convert to euler angles
             q = self.states[i - 1][:4]
             x, y, z = quaternion_to_euler(q)
@@ -441,17 +441,13 @@ class Simulator():
             # check if we've reached our desired angle for the first time
             if (self.finishedTime == -1):
                 if (x<=DESIRED_ANGLE[0]):
-                    print("REACHED DESIRED ANGLE OF 90")
+                    print("REACHED DESIRED ANGLE OF " + str(DESIRED_ANGLE[0]) + " DEGREES AFTER " + str(i*self.dt) + " SECONDS!")
                     self.finishedTime = i*self.dt
-                    print("Time needed is " + str(self.finishedTime))
-        '''
-        if self.mag_sat.state == "detumble":
+
+        elif self.mag_sat.state == "detumble":
             # threshold 0.5-1 degress per second per axis
             thresholdLow = 0
-            if RUNNING_1D and DETUMBLE_1D:
-                thresholdHigh = DETUMBLE_THRESHOLD_1D
-            else:
-                thresholdHigh = DETUMBLE_THRESHOLD
+            thresholdHigh = DETUMBLE_THRESHOLD
 
             angularX = abs(self.states[i - 1][4])
             angularY = abs(self.states[i - 1][5])
@@ -532,15 +528,8 @@ class Simulator():
             self.mode[i] = PROTOCOL_MAP['demagnetize']
             self.errorQuats[i] = self.errorQuats[i - 1]
             self.nadirError[i] = self.nadirError[i - 1]
-        '''
-        elif RUNNING_1D and not DETUMBLE_1D:
 
-            # for 1D test, use simple custom controller
-            self.mag_voltages[i] = maxPowerController(DESIRED_MAGNETIC_MOMENTS, self.mag_sat)
-            self.mag_voltages[i] = np.clip(self.mag_voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
-            self.mode[i] = PROTOCOL_MAP['detumble']
-        '''
-        if self.mag_sat.state == "detumble":
+        elif self.mag_sat.state == "detumble":
 
             # if running b-dot instead of b-cross, don't run until we have proper data
             if GYRO_WORKING or len(self.mag_sat.prevB) >= MAG_READINGS_STORED:
@@ -592,6 +581,12 @@ class Simulator():
             # Run PD controller to generate output for reaction wheels based on target orientation
             self.pwms[i] = self.controller.pid_controller(quaternion, TARGET, omega, self.pwms[i-1])
             self.mode[i] = PROTOCOL_MAP['target_point']
+
+            # if RUNNING_1D:
+                # # for 1D test, use simple custom controller
+                # self.mag_voltages[i] = maxPowerController(DESIRED_MAGNETIC_MOMENTS, self.mag_sat)
+                # self.mag_voltages[i] = np.clip(self.mag_voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
+                # self.mode[i] = PROTOCOL_MAP['detumble']
 
         elif self.mag_sat.state == "idle":
             self.mode[i] = PROTOCOL_MAP['idle']

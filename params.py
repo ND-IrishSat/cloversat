@@ -91,13 +91,14 @@ MEASUREMENT_SPACE_DIMENSION = 6
 # whether to generate new pySOL data or not
 GENERATE_NEW = True
 # csv to get pre-generated pysol b field from
-B_FIELD_CSV_FILE = "leo_oe_10.csv"
+# B_FIELD_CSV_FILE = "leo_oe_10.csv"
 # B_FIELD_CSV_FILE = "1_and_half_orbit.csv" # .05 timestep
 # B_FIELD_CSV_FILE = "1_and_half_orbit_quarter.csv" # .025 timestep
 # B_FIELD_CSV_FILE = "1_orbit.csv" # .1 timestep
+B_FIELD_CSV_FILE = "1d_1orbit_tenth_s_gps.csv" # .1 timestep, aligns with 1D PySOL generation
 
 # if false, use PySOL to calculate orbital magnetic field
-CONSTANT_B_FIELD = True
+CONSTANT_B_FIELD = False
 SENSOR_NOISE = True
 STANDSTILL = False # keep satellite in same position around the earth
 
@@ -181,6 +182,8 @@ RW_CONFIG_INERTIA = np.array([[Iw1, 0, 0, 0],
                               [0, Iw2, 0, 0],
                               [0, 0, Iw3, 0],
                               [0, 0, 0, Iw4]])
+
+RW_CONFIG_INERTIA *= RW_AXES
 
 # Principal moment of inertia for reaction wheels about spin axis and about axis transverse to spin axis, respectively
 RW_SPIN_AXIS_INERTIA = 5.1e-7 # 1e-7 also mentioned
@@ -346,53 +349,33 @@ FERRO_MAX_MAGNETIC_MOMENT = FERRO_NUM_TURNS * FERRO_AREA * MAX_CURRENT_MAG * FER
 # =======  SIMPLE 1D TEST  =================================================
 
 if (RUNNING_1D):
-    DETUMBLE_1D = False
     GUI_ON = False
 
-    # In EOMs, the velocity is constrained to the z axis only
-    # Also, only simulate the z-axis reaction wheel
-    RW_AXES = np.array([0, 0, 1, 0])
+    # bitmask for orientation of table: only movement along z axis should be allowed
+    FREEDOM_OF_MOVEMENT_AXES = np.array([0,0,1])
+
+    #inertia of bowling ball testbed in ?? (the np array is in kg m^2)
+    TESTBED_INERTIA = (0.00029263965) * np.array([[-0.41, 0.00, 0.91,
+                                                   0.91, 0.00, 0.41,
+                                                  0.00, 1.00, 0.00]])
+
+    CUBESAT_BODY_INERTIA = TESTBED_INERTIA
+    CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
+
+    VELOCITY_INITIAL = np.array([0.0, 0.0, 0.0])*FREEDOM_OF_MOVEMENT_AXES
+    DESIRED_ANGLE = np.array([-90, 0, 0]) # desired angle for x axis
 
     # if true, replace proper torquer with aircore
     TEST_AIRCORE = False
-
-    # TODO: find inertia of bowling ball testbed
-    #inertia of bowling ball testbed in (the np array is in kg m^2)
-    TESTBED_INERTIA = (0.00029263965) * np.array([[-0.41, 0.00, 0.91, 
-                                                   0.91, 0.00, 0.41, 
-                                                  0.00, 1.00, 0.00]])
-    print(TESTBED_INERTIA)
-    
-    
-    # CUBESAT_BODY_INERTIA = ???
-    # CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
-
-    # The next four parameters are only here for convenience, they just reset
-    # the earlier values in the code
-    # Important: Only set initial velocity in the z-axis
-    VELOCITY_INITIAL = np.array([0.0, 0.0, 3.0])
-    # Set initial angle, again only set angles about the z-axis
-    QUAT_INITIAL = np.array([1.0, 0.0, 0.0, 0.0])
-    # Set the target quaternion for if we are in target_point mode, only z-axis angles
-    TARGET = np.array([1.0, 0.0, 0.0, 1.0])
-    # Control mode
-    STARTING_PROTOCOL = "target_point" # "detumble", "point", "target_point", "idle"
-
     # what magnetic moment to create along each axis (should only be 1 axis)
     if TEST_AIRCORE:
         #using maxing to return an array
         DESIRED_MAGNETIC_MOMENTS = AIR_MAX_MAGNETIC_MOMENT*MAG_AXES
     else:
         DESIRED_MAGNETIC_MOMENTS = FERRO_MAX_MAGNETIC_MOMENT*MAG_AXES
-    DESIRED_ANGLE = np.array([-90, 0, 0]) # desired angle for x axis
 
-    # ==========  1D DETUMBLE/GUI  =====================================
+    # ==========  1D GUI  =====================================
 
-
-    if DETUMBLE_1D and not GUI_ON:
-        VELOCITY_INITIAL = np.array([0.0, 0.0, 20.0])
-        HOURS = 25 / 60 # simulation time in hours
-    DETUMBLE_THRESHOLD_1D = 0.2
     # 3e-3 for fast detubmle (< 100 seconds)
     K = 1.25e-4
 
@@ -426,13 +409,10 @@ if (RUNNING_1D):
     if GUI_ON:
         # show 3D animation if doing gui (probably showcasing)
         RESULT = 2
-    ACCURATE_MAG_READINGS = False
 
     # convert to rad/s
     if not DEGREES:
         VELOCITY_INITIAL *= math.pi / 180
-        DETUMBLE_THRESHOLD_1D *= math.pi / 180
-        
 
 # ================  3D OPTIONS  ======================================================
 
