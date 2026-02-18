@@ -63,23 +63,74 @@ class ReactionWheel:
         # Initialize hardware PWM OFF
         self.pi.hardware_PWM(self.pwm, 20000, 0)
         time.sleep(0.1)
-
+    
     def set_speed(self, duty_0_255: int):
-        '''
-        Set motors to specified speed
+    #
+    # Set motor speed and direction.
+    # duty_0_255: -255..255
+    #   negative -> one direction
+    #   positive -> the other direction
+    # Uses pigpio hardware PWM (duty 0..1_000_000).
+    # """
 
-        duty call goes from 0 to 255
-        TODO: switch from duty to PWM input
-        '''
+    # Clamp input
+        if duty_0_255 is None:
+            duty_0_255 = 0
+        duty_0_255 = int(duty_0_255)
+        if duty_0_255 > 255:
+            duty_0_255 = 255
+        if duty_0_255 < -255:
+            duty_0_255 = -255
 
-        if (duty_0_255 < 0):
-            self.pi.write(self.dire, 1)
-        else:
-            self.pi.write(self.dire, 0)
+    # Direction bit (keep your convention: 0 = clockwise)
+        new_dir = 1 if duty_0_255 < 0 else 0
 
+    # Magnitude for PWM
+        duty_255 = abs(duty_0_255)
+        new_hw_duty = duty_255 * 1_000_000 // 255  # 0..1_000_000
+
+    # Remember last direction + last duty (create on first call)
+        last_dir = getattr(self, "last_dir", new_dir)
+        last_hw_duty = getattr(self, "current_hw_duty", 0)
+
+    # If switching direction, ramp down to 0 first to avoid the "glitch"
+        if new_dir != last_dir and last_hw_duty > 0:
+        # turn PWM off (coast) briefly
+            self.pi.hardware_PWM(self.pwm, 1000, 0)
+        time.sleep(0.08)  # 80ms dead-time; try 0.05–0.15 if needed
+
+        # optional short brake pulse (uncomment if your driver supports it well)
+        # self.pi.write(self.br, 1)
+        # time.sleep(0.03)
+        # self.pi.write(self.br, 0)
+
+    # Set direction and release brake
+        self.pi.write(self.dire, new_dir)
         self.pi.write(self.br, 0)
-        duty = max(0, min(255, int(abs(duty_0_255))))
-        self.pi.hardware_PWM(self.pwm, 20000, duty * 1_000_000 // 255)
+
+    # Apply new PWM
+        self.pi.hardware_PWM(self.pwm, 1000, new_hw_duty)
+
+    # Save state for next call
+        self.last_dir = new_dir
+        self.current_hw_duty = new_hw_duty
+
+    # def set_speed(self, duty_0_255: int):
+    #     '''
+    #     Set motors to specified speed
+
+    #     duty call goes from 0 to 255
+    #     TODO: switch from duty to PWM input
+    #     '''
+
+    #     if (duty_0_255 < 0):
+    #         self.pi.write(self.dire, 1)
+    #     else:
+    #         self.pi.write(self.dire, 0)
+
+    #     self.pi.write(self.br, 0)
+    #     duty = max(0, min(255, int(abs(duty_0_255))))
+    #     self.pi.hardware_PWM(self.pwm, 20000, duty * 1_000_000 // 255)
 
 
     def slow_down(self, total_time=1.0, final_stop_condition = False):
