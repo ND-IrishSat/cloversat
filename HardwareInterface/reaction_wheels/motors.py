@@ -46,7 +46,8 @@ class ReactionWheel:
         #input pins to the pi
         self.pi.set_mode(self.freq, pigpio.INPUT)
 
-        self.pi.set_glitch_filter(self.freq, 100)  # ignore pulses shorter than 100 µs
+        self.pi.set_pull_up_down(self.freq, pigpio.PUD_UP)
+        self.pi.set_glitch_filter(self.freq, 300)
 
 
         #output pins from the PI to the wheels pi. set_mode(self.pwm, pigpio.OUTPUT)
