@@ -9,10 +9,9 @@ Data such as quaternion, magnetic, angle, acceleration, and temperature.
 
 
 '''
-from vectornav import Sensor, Registers
-from vectornav.Registers import *
-
-s = Sensor()
+from vnpy import VnSensor
+import vnpy as Registers  # Create namespace alias for backwards compatibility
+s = VnSensor()
 
 '''
 Alternate connection route:
@@ -39,18 +38,16 @@ def get_instance():
 		The singleton instance of the VnSensor 
 	'''
 	return s
-
-def connect(port = 'dev/ttyUSB0'):
+def connect(port = 'COM5'):
 	'''
 	Connects to the VnSensor version using specified COM port
 
 	Prints "CONNECTED" upon succesful connection verification
 	'''
-	# s.connect('COM5', 115200)
-	s.autoConnect(port)
-	print("CONNECTED")
-	# if(s.verify_sensor_connectivity()):
-		# print("CONNECTED")
+	s.connect(port, 115200)  # Connect using vnpy API
+	if s.verify_sensor_connectivity():
+		print("CONNECTED")
+		return True
 
 def disconnect():
 	'''
@@ -69,10 +66,9 @@ def read_quat():
 		A 4 element list containing the quaternion values (w, x, y, z)
 		Note: Quaternions do not have units
 	'''
-	quat_register= Registers.Quaternion()
-	s.readRegister(quat_register)
-	quat_register = [quat_register.quatS, quat_register.quatX, quat_register.quatY, quat_register.quatZ]
-	return quat_register
+	quat = s.read_attitude_quaternion()
+	# vnpy returns as Quaternion object, extract w, x, y, z
+	return [quat.w, quat.x, quat.y, quat.z]
 
 def read_mag():
 	'''
@@ -81,9 +77,8 @@ def read_mag():
 	@return 
 		A 3 element list containing 3 float values in microtesla (x,y,z)
 	'''
-	mag_register = Registers.Mag()
-	s.readRegister(mag_register)
-	return [mag_register.magX, mag_register.magY, mag_register.magZ]
+	mag = s.read_magnetic_measurements()
+	return [mag.x, mag.y, mag.z]
 
 
 def read_gyro():
@@ -93,31 +88,29 @@ def read_gyro():
 	@return 
 		A returns 3 element list containing 3 float values in °/s (x,y,z)
 	'''
-	gyro_register = Registers.Gyro()
-	s.readRegister(gyro_register)
-	return [gyro_register.gyroX, gyro_register.gyroY, gyro_register.gyroZ]
+	gyro = s.read_angular_rate_measurements()
+	return [gyro.x, gyro.y, gyro.z]
 	
 
 def read_accel():
 	'''
-	read_accel(): reads angular acceleration value from sensor
+	read_accel(): reads acceleration value from sensor
 
 	@return 
-		A returns 3 element list containing 3 float values in °/s^2 (x,y,z)
+		A returns 3 element list containing 3 float values in m/s^2 (x,y,z)
 	'''
-	reading = s.readRegister(Registers.Attitude.QuatMagAccelRate)
-	return [reading.accelX, reading.accelY, reading.accelZ]
+	accel = s.read_acceleration_measurements()
+	return [accel.x, accel.y, accel.z]
 
 def read_all():
 	'''
-	read_all(): Gets magnetic acceleration and angular velocity
+	read_all(): Gets magnetic field and angular velocity
 	@return
 		Returns a 2 element list containing all data from magnetic field and angular velocity
 	'''
-	allData = s.readRegister(Registers.Attitude.QuatMagAccelRate)
-	mag = [allData.magX, allData.magY, allData.magZ]
-	gyro = allData.gyro
-	return [mag, gyro]
+	mag = s.read_magnetic_measurements()
+	gyro = s.read_angular_rate_measurements()
+	return [[mag.x, mag.y, mag.z], [gyro.x, gyro.y, gyro.z]]
 
 def get_mag_gyro_quat():
 	'''

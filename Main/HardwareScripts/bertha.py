@@ -6,18 +6,26 @@ Combined script for interfacing with our BERTHA test bed.
 WIP
 First step, connect to VN100 IMU and read datapip
 
+2/17/24
+read from sensors:
+	-vectornav: magnetic field, angular acceeraitoon
+	-gps: reads from csv file
+pass the data to control law (choose)
+pass output to the reaction wheels
 '''
 
 # add to path variable so that subdirectory modules can be imported
 import sys, os
-sys.path.extend([f'./{name}' for name in os.listdir(".") if os.path.isdir(name)])
 
-import os
+# Find project root by going up directories until we find HardwareInterface folder
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, project_root)
+
 import numpy as np
 
 import HardwareInterface.vn100.vn100_interface as vn
 
-import sim.visualizer as simulator
+import Simulator.visualizer as simulator
 
 import time
 
