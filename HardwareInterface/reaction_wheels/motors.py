@@ -69,50 +69,37 @@ class ReactionWheel:
         time.sleep(0.1)
     
     def set_speed(self, duty_0_255: int):
-        PWM_HZ = 20000          # try 20000; if your driver hates it, try 10000
-        STEP = 8                # duty steps per update (smaller = smoother)
-        STEP_DELAY = 0.005      # seconds between steps (5ms)
-
+        PWM_HZ = 20000
         duty_0_255 = int(max(-255, min(255, duty_0_255)))
-        new_dir = 1 if duty_0_255 < 0 else 0
-        target_255 = abs(duty_0_255)
+
+        new_dir = 1 if duty_0_255 < 0 else 0   # keep your convention
+        mag = abs(duty_0_255)
+        target = mag * 1_000_000 // 255
 
         last_dir = getattr(self, "last_dir", new_dir)
-        current_255 = getattr(self, "current_255", 0)
 
-    # If direction changes, ramp down to 0 first
         if new_dir != last_dir:
-            while current_255 > 0:
-                current_255 = max(0, current_255 - STEP)
-                hw = current_255 * 1_000_000 // 255
-                self.pi.hardware_PWM(self.pwm, PWM_HZ, hw)
-                time.sleep(STEP_DELAY)
-        # short dead-time before flipping direction
-        self.pi.hardware_PWM(self.pwm, PWM_HZ, 0)
-        time.sleep(0.08)
+        # 1) coast to stop
+            self.pi.hardware_PWM(self.pwm, PWM_HZ, 0)
+            self.pi.write(self.br, 0)
 
-        self.pi.write(self.dire, new_dir)
-        self.last_dir = new_dir
+        # 2) wait until RPM is near zero (timeout so it never hangs)
+            t0 = time.time()
+            while time.time() - t0 < 1.0:  # 1 second max wait
+                if abs(getattr(self, "rpm", 9999)) < 30:  # tune 10–50
+                    break
+            time.sleep(0.01)
 
-    # Release brake (assuming 0 = release)
+        # 3) flip direction with a tiny dead-time
+            time.sleep(0.05)
+            self.pi.write(self.dire, new_dir)
+            time.sleep(0.05)
+
+    # drive
         self.pi.write(self.br, 0)
+        self.pi.hardware_PWM(self.pwm, PWM_HZ, target)
 
-    # Ramp to target (smooth even when not reversing)
-        while current_255 != target_255:
-            if current_255 < target_255:
-                current_255 = min(target_255, current_255 + STEP)
-            else:
-                current_255 = max(target_255, current_255 - STEP)
-
-        hw = current_255 * 1_000_000 // 255
-        self.pi.hardware_PWM(self.pwm, PWM_HZ, hw)
-        time.sleep(STEP_DELAY)
-
-    # Save state
-        self.current_255 = current_255
-        self.current_hw_duty = current_255 * 1_000_000 // 255
         self.last_dir = new_dir
-
     # def set_speed(self, duty_0_255: int):
     #     '''
     #     Set motors to specified speed
