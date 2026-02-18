@@ -68,54 +68,23 @@ class ReactionWheel:
         self.pi.hardware_PWM(self.pwm, 20000, 0)
         time.sleep(0.1)
     
+ 
     def set_speed(self, duty_0_255: int):
-        PWM_HZ = 20000
-        duty_0_255 = int(max(-255, min(255, duty_0_255)))
+        '''
+        Set motors to specified speed
 
-        new_dir = 1 if duty_0_255 < 0 else 0   # keep your convention
-        mag = abs(duty_0_255)
-        target = mag * 1_000_000 // 255
+        duty call goes from 0 to 255
+        TODO: switch from duty to PWM input
+        '''
 
-        last_dir = getattr(self, "last_dir", new_dir)
+        if (duty_0_255 < 0):
+            self.pi.write(self.dire, 1)
+        else:
+            self.pi.write(self.dire, 0)
 
-        if new_dir != last_dir:
-        # 1) coast to stop
-            self.pi.hardware_PWM(self.pwm, PWM_HZ, 0)
-            self.pi.write(self.br, 0)
-
-        # 2) wait until RPM is near zero (timeout so it never hangs)
-            t0 = time.time()
-            while time.time() - t0 < 1.0:  # 1 second max wait
-                if abs(getattr(self, "rpm", 9999)) < 30:  # tune 10–50
-                    break
-            time.sleep(0.01)
-
-        # 3) flip direction with a tiny dead-time
-            time.sleep(0.05)
-            self.pi.write(self.dire, new_dir)
-            time.sleep(0.05)
-
-    # drive
         self.pi.write(self.br, 0)
-        self.pi.hardware_PWM(self.pwm, PWM_HZ, target)
-
-        self.last_dir = new_dir
-    # def set_speed(self, duty_0_255: int):
-    #     '''
-    #     Set motors to specified speed
-
-    #     duty call goes from 0 to 255
-    #     TODO: switch from duty to PWM input
-    #     '''
-
-    #     if (duty_0_255 < 0):
-    #         self.pi.write(self.dire, 1)
-    #     else:
-    #         self.pi.write(self.dire, 0)
-
-    #     self.pi.write(self.br, 0)
-    #     duty = max(0, min(255, int(abs(duty_0_255))))
-    #     self.pi.hardware_PWM(self.pwm, 20000, duty * 1_000_000 // 255)
+        duty = max(0, min(255, int(abs(duty_0_255))))
+        self.pi.hardware_PWM(self.pwm, 20000, duty * 1_000_000 // 255)
 
 
     def slow_down(self, total_time=1.0, final_stop_condition = False):
