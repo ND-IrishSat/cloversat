@@ -46,6 +46,9 @@ class ReactionWheel:
         #input pins to the pi
         self.pi.set_mode(self.freq, pigpio.INPUT)
 
+        self.pi.set_glitch_filter(self.freq, 100)  # ignore pulses shorter than 100 µs
+
+
         #output pins from the PI to the wheels pi. set_mode(self.pwm, pigpio.OUTPUT)
         self.pi.set_mode(self.pwm, pigpio.OUTPUT)
         self.pi.set_mode(self.daa, pigpio.OUTPUT)
@@ -65,55 +68,49 @@ class ReactionWheel:
         time.sleep(0.1)
     
     def set_speed(self, duty_0_255: int):
-    #
-    # Set motor speed and direction.
-    # duty_0_255: -255..255
-    #   negative -> one direction
-    #   positive -> the other direction
-    # Uses pigpio hardware PWM (duty 0..1_000_000).
-    # """
+        PWM_HZ = 20000          # try 20000; if your driver hates it, try 10000
+        STEP = 8                # duty steps per update (smaller = smoother)
+        STEP_DELAY = 0.005      # seconds between steps (5ms)
 
-    # Clamp input
-        if duty_0_255 is None:
-            duty_0_255 = 0
-        duty_0_255 = int(duty_0_255)
-        if duty_0_255 > 255:
-            duty_0_255 = 255
-        if duty_0_255 < -255:
-            duty_0_255 = -255
-
-    # Direction bit (keep your convention: 0 = clockwise)
+        duty_0_255 = int(max(-255, min(255, duty_0_255)))
         new_dir = 1 if duty_0_255 < 0 else 0
+        target_255 = abs(duty_0_255)
 
-    # Magnitude for PWM
-        duty_255 = abs(duty_0_255)
-        new_hw_duty = duty_255 * 1_000_000 // 255  # 0..1_000_000
-
-    # Remember last direction + last duty (create on first call)
         last_dir = getattr(self, "last_dir", new_dir)
-        last_hw_duty = getattr(self, "current_hw_duty", 0)
+        current_255 = getattr(self, "current_255", 0)
 
-    # If switching direction, ramp down to 0 first to avoid the "glitch"
-        if new_dir != last_dir and last_hw_duty > 0:
-        # turn PWM off (coast) briefly
-            self.pi.hardware_PWM(self.pwm, 1000, 0)
-        time.sleep(0.08)  # 80ms dead-time; try 0.05–0.15 if needed
+    # If direction changes, ramp down to 0 first
+        if new_dir != last_dir:
+            while current_255 > 0:
+                current_255 = max(0, current_255 - STEP)
+                hw = current_255 * 1_000_000 // 255
+                self.pi.hardware_PWM(self.pwm, PWM_HZ, hw)
+                time.sleep(STEP_DELAY)
+        # short dead-time before flipping direction
+        self.pi.hardware_PWM(self.pwm, PWM_HZ, 0)
+        time.sleep(0.08)
 
-        # optional short brake pulse (uncomment if your driver supports it well)
-        # self.pi.write(self.br, 1)
-        # time.sleep(0.03)
-        # self.pi.write(self.br, 0)
-
-    # Set direction and release brake
         self.pi.write(self.dire, new_dir)
+        self.last_dir = new_dir
+
+    # Release brake (assuming 0 = release)
         self.pi.write(self.br, 0)
 
-    # Apply new PWM
-        self.pi.hardware_PWM(self.pwm, 1000, new_hw_duty)
+    # Ramp to target (smooth even when not reversing)
+        while current_255 != target_255:
+            if current_255 < target_255:
+                current_255 = min(target_255, current_255 + STEP)
+            else:
+                current_255 = max(target_255, current_255 - STEP)
 
-    # Save state for next call
+        hw = current_255 * 1_000_000 // 255
+        self.pi.hardware_PWM(self.pwm, PWM_HZ, hw)
+        time.sleep(STEP_DELAY)
+
+    # Save state
+        self.current_255 = current_255
+        self.current_hw_duty = current_255 * 1_000_000 // 255
         self.last_dir = new_dir
-        self.current_hw_duty = new_hw_duty
 
     # def set_speed(self, duty_0_255: int):
     #     '''
