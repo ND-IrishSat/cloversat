@@ -14,6 +14,8 @@ Output:
 
 import time
 import pigpio
+import signal
+import sys
 
 DAA = 17
 COMU = 24
@@ -139,6 +141,15 @@ class ReactionWheel:
             self.rpm = (frequency_hz * 60.0) / NUMBER_POLE_PAIRS
 
 
+def signal_handler(sig, frame):
+    print("\nCtrl+C detected. Killing reaction wheel...")
+    kill()
+    sys.exit(0)
+
+# Register handler for Ctrl+C
+signal.signal(signal.SIGINT, signal_handler)
+
+
 if __name__ == '__main__':
     #stop and close functions
     pi = pigpio.pi()
@@ -159,3 +170,6 @@ if __name__ == '__main__':
 
     wheel.kill()
     pi.stop()
+
+
+
