@@ -1,4 +1,5 @@
 '''
+
 motors.py
 Authors: Rawan, Nic, Michael P, Andrew
 
@@ -76,8 +77,10 @@ class ReactionWheel:
         duty call goes from 0 to 255
         TODO: switch from duty to PWM input
         '''
+        #check if input duty is different than what we are now 
 
         if (duty_0_255 < 0):
+            #1 is CCW
             self.pi.write(self.dire, 1)
         else:
             self.pi.write(self.dire, 0)
@@ -137,7 +140,11 @@ class ReactionWheel:
 
         if interval_us > 0:
             frequency_hz = 1_000_000.0 / interval_us
-            self.rpm = (frequency_hz * 60.0) / NUMBER_POLE_PAIRS
+            rpm = (frequency_hz * 60.0) / NUMBER_POLE_PAIRS
+
+            direction = self.pi.read(DIRE)
+            sign = 1 if direction == 1 else -1
+            self.rpm = sign * rpm
 
 
 if __name__ == '__main__':
@@ -152,11 +159,12 @@ if __name__ == '__main__':
     wheel.callback = pi.callback(FREQ, pigpio.RISING_EDGE, wheel.get_rpm_callback)
 
     # 200 = ~700 rpm
-    wheel.set_speed(200)
-    for i in range(15):
-        print(wheel.getPWMFrequency())
+  #  wheel.set_speed(300)
+    for i in range(-300, 0, 5):
+       # print(wheel.getPWMFrequency())
+        wheel.set_speed(i)
         print(f"RPM: {wheel.rpm:.2f}")
-        time.sleep(2)
+        time.sleep(20/60)
 
     wheel.kill()
     pi.stop()
