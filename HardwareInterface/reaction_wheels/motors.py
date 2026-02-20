@@ -69,40 +69,39 @@ class ReactionWheel:
         time.sleep(0.1)
     
  
-    def set_speed(self, duty_0_255: int):
+    def set_speed(self, speed_0_255: int):
         '''
         Set motors to specified speed
-
-        duty call goes from 0 to 255
-        TODO: switch from duty to PWM input
+        If negative speed, set direction to counterclockwise, otherwise clockwise
+        Then set the PWM pin duty cycle to absolute value of speed, converted to duty cycle (0-1_000_000)
         '''
 
-        if (duty_0_255 < 0):
+        if (speed_0_255 < 0):
             self.pi.write(self.dire, 1)
         else:
             self.pi.write(self.dire, 0)
 
         self.pi.write(self.br, 0)
-        duty = max(0, min(255, int(abs(duty_0_255))))
-        self.pi.hardware_PWM(self.pwm, 20000, duty * 1_000_000 // 255)
+        pwm_to_set = max(0, min(255, int(abs(speed_0_255))))
+        self.pi.hardware_PWM(self.pwm, 20000, pwm_to_set/255*1_000_000) # this converts pwm (0-255) to duty cycle (0-1_000_000)
 
 
     def slow_down(self, total_time=1.0, final_stop_condition = False):
-        current_PWM = self.pi.get_PWM_dutycycle(self.pwm)
-        if current_PWM <= 0:
+        current_duty = self.pi.get_PWM_dutycycle(self.pwm)
+        if current_duty <= 0:
             if  final_stop_condition:
                 self.pi.write(self.br, 1)
             return
 
         time_increment = 60
         delay = total_time / time_increment
-        step = max(1, int(current_PWM / time_increment))  # depends on current PWM
+        step = max(1, int(current_duty / time_increment))  # depends on current duty cycle
 
         self.pi.write(self.br, 0)  # release brake during ramp
-        duty = current_PWM
+        duty = current_duty
         while duty > 0:
             duty = max(0, duty - step)
-            self.pi.set_PWM_dutycycle(self.pwm, duty)
+            self.pi.hardware_PWM(self.pwm, 20000, duty)
             time.sleep(delay)
 
         if final_stop_condition:
