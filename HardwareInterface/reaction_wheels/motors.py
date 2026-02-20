@@ -78,18 +78,27 @@ class ReactionWheel:
         If negative speed, set direction to counterclockwise, otherwise clockwise
         Then set the PWM pin duty cycle to absolute value of speed, converted to duty cycle (0-1_000_000)
         '''
-        #check if input duty is different than what we are now 
+        #check if input duty is different than what we are now sleep for 30 secs and change pin 
+#if theyre different then you have to go accordingly 
 
+        dir_switch_sleep = 2
+        CW = 0
+        CCW = 1
 
-        if (speed_0_255 < 0):
+        curr_dir = self.pi.read(DIRE)
+        if (speed_0_255 < 0 and curr_dir == CW):
             #1 is CCW
-            self.pi.write(self.dire, 1)
-        else:
-            self.pi.write(self.dire, 0)
+            # Go from CC to CCW
+            time.sleep(dir_switch_sleep)
+            self.pi.write(self.dire, CCW)
+        elif (speed_0_255 > 0 and curr_dir == CCW):
+            # Go from CCW to CC
+            time.sleep(dir_switch_sleep)
+            self.pi.write(self.dire, CW)
 
         self.pi.write(self.br, 0)
         pwm_to_set = max(0, min(255, int(abs(speed_0_255))))
-        self.pi.hardware_PWM(self.pwm, 20000, pwm_to_set/255*1_000_000) # this converts pwm (0-255) to duty cycle (0-1_000_000)
+        self.pi.hardware_PWM(self.pwm, 20000, int(pwm_to_set/255*1_000_000)) # this converts pwm (0-255) to duty cycle (0-1_000_000)
 
 
     def slow_down(self, total_time=1.0, final_stop_condition = False):
@@ -145,7 +154,7 @@ class ReactionWheel:
             rpm = (frequency_hz * 60.0) / NUMBER_POLE_PAIRS
 
             direction = self.pi.read(DIRE)
-            sign = 1 if direction == 1 else -1
+            sign = -1 if direction == 1 else 1
             self.rpm = sign * rpm
 
 
@@ -171,7 +180,7 @@ if __name__ == '__main__':
 
     # 200 = ~700 rpm
   #  wheel.set_speed(300)
-    for i in range(-300, 0, 5):
+    for i in range(-300, 200, 5):
        # print(wheel.getPWMFrequency())
         wheel.set_speed(i)
         print(f"RPM: {wheel.rpm:.2f}")
