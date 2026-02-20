@@ -363,7 +363,7 @@ if (RUNNING_1D):
     CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
 
     VELOCITY_INITIAL = np.array([0.0, 0.0, 0.0])*FREEDOM_OF_MOVEMENT_AXES
-    DESIRED_ANGLE = np.array([-90, 0, 0]) # desired angle for x axis
+    # DESIRED_ANGLE = np.array([-90, 0, 0]) # desired angle for x axis
 
     # if true, replace proper torquer with aircore
     TEST_AIRCORE = False

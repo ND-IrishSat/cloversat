@@ -433,16 +433,16 @@ class Simulator():
                 # print(i, " mags on", self.magnetometerReadingTimer * self.dt, ", ", self.torquersOffTimer * self.dt)
                 self.magnetometerReadingTimer += 1.0
 
-        if RUNNING_1D:
-            # extract current quaternion and convert to euler angles
-            q = self.states[i - 1][:4]
-            x, y, z = quaternion_to_euler(q)
+        # if RUNNING_1D:
+        #     # extract current quaternion and convert to euler angles
+        #     q = self.states[i - 1][:4]
+        #     x, y, z = quaternion_to_euler(q)
 
-            # check if we've reached our desired angle for the first time
-            if (self.finishedTime == -1):
-                if (x<=DESIRED_ANGLE[0]):
-                    print("REACHED DESIRED ANGLE OF " + str(DESIRED_ANGLE[0]) + " DEGREES AFTER " + str(i*self.dt) + " SECONDS!")
-                    self.finishedTime = i*self.dt
+        #     # check if we've reached our desired angle for the first time
+        #     if (self.finishedTime == -1):
+        #         if (x<=DESIRED_ANGLE[0]):
+        #             print("REACHED DESIRED ANGLE OF " + str(DESIRED_ANGLE[0]) + " DEGREES AFTER " + str(i*self.dt) + " SECONDS!")
+        #             self.finishedTime = i*self.dt
 
         elif self.mag_sat.state == "detumble":
             # threshold 0.5-1 degress per second per axis
