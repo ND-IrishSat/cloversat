@@ -14,6 +14,13 @@ pass the data to control law (choose)
 pass output to the reaction wheels
 '''
 
+#cloversat\Main\SimScripts
+#cloversat\ukf
+#these are where the multiple ukf py files all seem to be located
+
+#also need to merge Rawan's changes, these will be in the motors branch, but even though she told me there should be a rotate function, I could not find it, reach out to her
+
+
 # add to path variable so that subdirectory modules can be imported
 import sys, os
 import csv
