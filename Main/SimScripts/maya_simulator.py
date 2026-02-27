@@ -46,6 +46,11 @@ To change clip speed in DaVinci resolve while stitching together images:
 
 '''
 
+# NOTE: add this to params.py if getting import errors
+# if RUNNING_MAYA:
+    # sys.path.insert(1, os.path.join(sys.path[0], 'Simulator'))
+    # sys.path.insert(1, os.path.join(sys.path[0], 'ukf'))
+
 import maya.cmds as mc
 import maya.api.OpenMaya as om
 
@@ -93,7 +98,7 @@ resetSessionForScript("cloversat")
 # import all needed modules (they should all update automatically after being deleted)
 p = import_module("cloversat.params")
 # reload(p)
-thing = import_module("cloversat.Simulator.B_dot")
+thing = import_module("cloversat.Controllers.B_dot")
 # reload(thing)
 thing = import_module("cloversat.Simulator.graphing")
 # reload(thing)
@@ -101,9 +106,9 @@ thing = import_module("cloversat.Simulator.saving")
 # reload(thing)
 thing = import_module("cloversat.Simulator.camera")
 # reload(thing)
-thing = import_module("cloversat.Pointing.image_processing")
+thing = import_module("cloversat.Controllers.Pointing.image_processing")
 # reload(thing)
-thing = import_module("cloversat.Pointing.nadir_point")
+thing = import_module("cloversat.Controllers.Pointing.nadir_point")
 # reload(thing)
 
 mag = import_module("cloversat.Simulator.magnetorquer")
