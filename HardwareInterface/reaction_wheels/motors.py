@@ -25,6 +25,10 @@ PWM = 12 # PWM input signal
 BR = 23 # BR is for brake control
 DIRE = 22 # direction control
 
+# Direction control: low (0) is clockwise, high (1) is counterclockwise
+CW = 0
+CCW = 1
+
 NUMBER_POLE_PAIRS = 4
 
 # motor class!
@@ -70,24 +74,21 @@ class ReactionWheel:
         # Initialize hardware PWM OFF
         self.pi.hardware_PWM(self.pwm, 20000, 0)
         time.sleep(0.1)
-    
- 
+
+
     def set_speed(self, speed_0_255: int):
         '''
         Set motors to specified speed
         If negative speed, set direction to counterclockwise, otherwise clockwise
         Then set the PWM pin duty cycle to absolute value of speed, converted to duty cycle (0-1_000_000)
         '''
-        #check if input duty is different than what we are now sleep for 30 secs and change pin 
-#if theyre different then you have to go accordingly 
 
         dir_switch_sleep = 2
-        CW = 0
-        CCW = 1
 
+        #check if sign of input is different than what we are now
+        # If so, sleep for a bit to allow the motor to slow down before switching direction, then switch direction
         curr_dir = self.pi.read(DIRE)
         if (speed_0_255 < 0 and curr_dir == CW):
-            #1 is CCW
             # Go from CC to CCW
             time.sleep(dir_switch_sleep)
             self.pi.write(self.dire, CCW)
@@ -158,13 +159,14 @@ class ReactionWheel:
             self.rpm = sign * rpm
 
 
-def signal_handler(sig, frame):
+def signal_handler(sig, frame, wheel=None):
     print("\nCtrl+C detected. Killing reaction wheel...")
-    kill()
+    wheel.kill()
     sys.exit(0)
 
-# Register handler for Ctrl+C
-signal.signal(signal.SIGINT, signal_handler)
+def register_signal_handler(wheel):
+    # Allow us to access ReactionWheel instance in the signal handler by using a lambda
+    signal.signal(signal.SIGINT, lambda sig, frame: signal_handler(sig, frame, wheel))
 
 
 if __name__ == '__main__':
@@ -174,6 +176,9 @@ if __name__ == '__main__':
         raise RuntimeError("pigpio daemon not running. Start with: sudo systemctl start pigpiod")
 
     wheel = ReactionWheel(pi, DAA, COMU, FREQ, PWM, BR, DIRE)
+
+    # Register handler for Ctrl+C
+    register_signal_handler(wheel)
 
     # Keep checking freq in the background
     wheel.callback = pi.callback(FREQ, pigpio.RISING_EDGE, wheel.get_rpm_callback)
