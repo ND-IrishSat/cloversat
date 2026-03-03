@@ -61,6 +61,23 @@ class USBSerialManager:
         except:
             return False
 
+    def send_pwm_byte(self, name, pwm_byte):
+        """Send a single byte to a device, for PWM."""
+        if name not in self.connections:
+            print(f"Device {name} not connected.")
+            return False
+
+        if not (0 <= pwm_byte <= 255):
+            print("PWM byte must be between 0 and 255.")
+            return False
+
+        try:
+            self.connections[name].write(bytes([pwm_byte]))
+            return True
+        except Exception as e:
+            print(f"Failed to send PWM byte to {name}: {e}")
+            return False
+
     def read_from_device(self, name, timeout=1):
         """Read from specific device"""
         if name not in self.connections:
@@ -86,20 +103,62 @@ class USBSerialManager:
         self.connections.clear()
 
 # Usage example
-manager = USBSerialManager()
+if __name__ == "__main__":
+    manager = USBSerialManager()
 
-# List available devices
-devices = manager.list_usb_devices()
-print("Available USB devices:")
-for device in devices:
-    print(f"  {device['device']}: {device['description']}")
+    # List available devices
+    devices = manager.list_usb_devices()
+    print("Available USB devices:")
+    for device in devices:
+        print(f"  {device['device']}: {device['description']}")
 
-# Connect to devices
-if devices:
-    device_path = devices[0]['device']
-    if manager.connect_device(device_path, 115200, 'gps'):
-        manager.send_to_device('gps', 'AT\r\n')
-        response = manager.read_from_device('gps', timeout=2)
-        print(f"GPS response: {response}")
+    # Connect to the first available USB device, assuming it's the Arduino
+    if devices:
+        # On a Raspberry Pi, this might be '/dev/ttyUSB0' or '/dev/ttyACM0'
+        # On Windows, it will be a 'COM' port.
+        device_path = devices[0]['device']
 
-manager.close_all()
+        # The name 'motor_controller' is an arbitrary name for this connection
+        if manager.connect_device(device_path, 115200, name='motor_controller'):
+            print("\n--- PWM Example ---")
+
+            # It's good practice to wait a moment for the serial connection to establish
+            # and for the Arduino to reset and clear its buffer.
+            time.sleep(2)
+
+            try:
+                # --- Ramp up PWM from 0 to 255 ---
+                print("Ramping up PWM...")
+                for pwm_val in range(0, 256, 5):
+                    print(f"Sending PWM value: {pwm_val}")
+                    if manager.send_pwm_byte('motor_controller', pwm_val):
+                        # Reading the response from the Arduino
+                        response = manager.read_from_device('motor_controller', timeout=0.1)
+                        if response:
+                            print(f"  Arduino response: {response.strip()}")
+                    else:
+                        print("  Failed to send PWM byte.")
+                    time.sleep(0.1) # Delay between sends
+
+                # --- Ramp down PWM from 255 to 0 ---
+                print("\nRamping down PWM...")
+                for pwm_val in range(50, -1, -5):
+                    print(f"Sending PWM value: {pwm_val}")
+                    if manager.send_pwm_byte('motor_controller', pwm_val):
+                        response = manager.read_from_device('motor_controller', timeout=0.1)
+                        if response:
+                            print(f"  Arduino response: {response.strip()}")
+                    else:
+                        print("  Failed to send PWM byte.")
+                    time.sleep(0.1)
+
+            except KeyboardInterrupt:
+                print("\nPWM test stopped by user.")
+            finally:
+                # Set PWM to 0 as a safety measure
+                print("\nSetting PWM to 0.")
+                manager.send_pwm_byte('motor_controller', 0)
+                manager.close_all()
+                print("Connection closed.")
+    else:
+        print("\nNo USB devices found.")
