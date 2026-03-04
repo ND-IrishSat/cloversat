@@ -75,6 +75,9 @@ def eoms(quaternion: np.ndarray, w_sat: np.ndarray, w_rw: np.ndarray, tau_sat: n
         w_sat_dot = w_sat_dot - 0.0041 * w_sat
         # For the 1D test, constrain the dot to one axis while conserving momentum
         magnitude = math.sqrt(w_sat_dot[0]**2 + w_sat_dot[1]**2 + w_sat_dot[2]**2)
+        # w_sat_dot = np.array([w_sat_dot[0] if FREEDOM_OF_MOVEMENT_AXES[0] else 0.0,
+        #                       w_sat_dot[1] if FREEDOM_OF_MOVEMENT_AXES[1] else 0.0,
+        #                       w_sat_dot[2] if FREEDOM_OF_MOVEMENT_AXES[2] else 0.0])
         w_sat_dot = np.array([np.sign(w_sat_dot[0]) * magnitude if FREEDOM_OF_MOVEMENT_AXES[0] else 0.0,
                               np.sign(w_sat_dot[1]) * magnitude if FREEDOM_OF_MOVEMENT_AXES[1] else 0.0,
                               np.sign(w_sat_dot[2]) * magnitude if FREEDOM_OF_MOVEMENT_AXES[2] else 0.0])

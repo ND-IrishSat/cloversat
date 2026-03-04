@@ -32,7 +32,7 @@ RW_VOLTAGES_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
 MAG_CURRENT_INITIAL = np.array([0.0, 0.0, 0.0])
 MAG_VOLTAGE_INITIAL = np.array([0.0, 0.0, 0.0])
 RW_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
-STARTING_PROTOCOL = "idle" # "detumble", "point", "target_point", "idle"
+STARTING_PROTOCOL = "target_point" # "detumble", "point", "target_point", "idle"
 PROTOCOL_MAP = {"demagnetize": -2, "detumble": -1, "idle": 0, "point": 1, "target_point": 2}
 
 # ============  ORBITAL DYNAMICS  ==================================================
@@ -89,7 +89,7 @@ STATE_SPACE_DIMENSION = 7
 MEASUREMENT_SPACE_DIMENSION = 6
 
 # whether to generate new pySOL data or not
-GENERATE_NEW = True
+GENERATE_NEW = False
 # csv to get pre-generated pysol b field from
 # B_FIELD_CSV_FILE = "leo_oe_10.csv"
 # B_FIELD_CSV_FILE = "1_and_half_orbit.csv" # .05 timestep
@@ -352,12 +352,22 @@ if (RUNNING_1D):
     GUI_ON = False
 
     # bitmask for orientation of table: only movement along z axis should be allowed
-    FREEDOM_OF_MOVEMENT_AXES = np.array([0,0,1])
+    FREEDOM_OF_MOVEMENT_AXES = np.array([0,1,0])
 
+    '''
     #inertia of bowling ball testbed in ?? (the np array is in kg m^2)
     TESTBED_INERTIA = (0.00029263965) * np.array([[-0.41, 0.00, 0.91,
                                                    0.91, 0.00, 0.41,
                                                   0.00, 1.00, 0.00]])
+
+    CUBESAT_BODY_INERTIA = TESTBED_INERTIA
+    CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
+    '''
+    
+    #inertia of bowling ball testbed in ?? (the np array is in kg m^2)
+    TESTBED_INERTIA = (1e-9) * np.array([[7502892.64, 7466.02, -35503.74],
+                                          [7466.02, 10102694.40, 19858.13],
+                                          [-35503.74, 19858.13, 7508309.50]])
 
     CUBESAT_BODY_INERTIA = TESTBED_INERTIA
     CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
