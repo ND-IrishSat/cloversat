@@ -72,7 +72,16 @@ class USBSerialManager:
             return False
 
         try:
-            self.connections[name].write(bytes([pwm_byte]))
+            pwm_byte = bytes([pwm_byte])
+            print("Sending: ")
+            print(pwm_byte)
+            #self.connections[name].write(bytes([pwm_byte]))
+            #print(self.connections[name])
+            bytes_written = self.connections[name].write(pwm_byte)
+            print("Wrote ", bytes_written, " bytes")
+            
+            #time.sleep(.5)
+            #self.connections[name].flush()
             return True
         except Exception as e:
             print(f"Failed to send PWM byte to {name}: {e}")

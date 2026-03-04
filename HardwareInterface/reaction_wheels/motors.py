@@ -81,11 +81,12 @@ class ReactionWheel:
         self.pi.write(self.comu, 0)
 
         if USING_ARDUINO:
-            devices = self.serial_manager.list_usb_devices()
-            if not devices:
-                raise RuntimeError("No USB devices found for Arduino connection.")
+            # devices = self.serial_manager.list_usb_devices()
+            #if not devices:
+            #    raise RuntimeError("No USB devices found for Arduino connection.")
             # Connect to the first device, assuming it's the Arduino
-            device_path = devices[0]['device']
+            # device_path = devices[0]['device']
+            device_path = "/dev/ttyACM0"
             if not self.serial_manager.connect_device(device_path, 115200, 'motor_controller'):
                 raise RuntimeError(f"Failed to connect to Arduino at {device_path}")
             print("Arduino connected for PWM control.")
@@ -123,6 +124,8 @@ class ReactionWheel:
 
         if USING_ARDUINO:
             self.serial_manager.send_pwm_byte('motor_controller', pwm_to_set)
+            #time.sleep(.5)
+            #response = self.serial_manager
         else:
             self.pi.hardware_PWM(self.pwm, 20000, int(pwm_to_set/255*1_000_000)) # this converts pwm (0-255) to duty cycle (0-1_000_000)
 
@@ -219,7 +222,7 @@ if __name__ == '__main__':
 
     # 200 = ~700 rpm
     # wheel.set_speed(300)
-    for i in range(-300, 200, 5):
+    for i in range(0, 50, 5):
        # print(wheel.getPWMFrequency())
         wheel.set_speed(i)
         print(f"RPM: {wheel.rpm:.2f}")
