@@ -110,7 +110,6 @@ def savePDF(outputFile, pngDir, sim):
 
         pdf.add_page()
         pdf.image(os.path.join(pngDirectory, "ReactionSpeeds.png"), x = x_offset, y = pdf.get_y(), w = 180)
-        pdf.add_page()
 
     if not np.array_equal(MAG_AXES, np.array([0, 0, 0])):
         # removed total power for now
@@ -123,10 +122,11 @@ def savePDF(outputFile, pngDir, sim):
         pdf.add_page()
 
         pdf.image(os.path.join(pngDirectory, "Power_Output.png"), x = x_offset, y = pdf.get_y(), w = 180)
-        pdf.ln(y_pic_offset)
-        pdf.image(os.path.join(pngDirectory, "MagTorques.png"), x = x_offset, y = pdf.get_y(), w = 180)
+        
+    pdf.ln(y_pic_offset)
+    pdf.image(os.path.join(pngDirectory, "Torques.png"), x = x_offset, y = pdf.get_y(), w = 180)
 
-        pdf.add_page()
+    pdf.add_page()
 
     # eulerText = f"""Our filtered orientation represented by Euler Angles (counterclockwise rotation about x, y, z). Can bug out sometimes. Near 180 degrees (pi) is the same as zero. """
     # pdf.multi_cell(0, 5, eulerText, 0, 'L')

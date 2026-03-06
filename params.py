@@ -351,8 +351,11 @@ FERRO_MAX_MAGNETIC_MOMENT = FERRO_NUM_TURNS * FERRO_AREA * MAX_CURRENT_MAG * FER
 if (RUNNING_1D):
     GUI_ON = False
 
+    # Coupling term? Based off inertia
+
     # bitmask for orientation of table: only movement along z axis should be allowed
     FREEDOM_OF_MOVEMENT_AXES = np.array([0,1,0])
+    RW_AXES = np.array([FREEDOM_OF_MOVEMENT_AXES[0], FREEDOM_OF_MOVEMENT_AXES[1], FREEDOM_OF_MOVEMENT_AXES[2], 0])
 
     '''
     #inertia of bowling ball testbed in ?? (the np array is in kg m^2)
@@ -364,6 +367,8 @@ if (RUNNING_1D):
     CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
     '''
     
+    # This inertia is so even the coupling term seems not to have a real effect
+    # In other words, no need to take it out for 1d simulation
     #inertia of bowling ball testbed in ?? (the np array is in kg m^2)
     TESTBED_INERTIA = (1e-9) * np.array([[7502892.64, 7466.02, -35503.74],
                                           [7466.02, 10102694.40, 19858.13],

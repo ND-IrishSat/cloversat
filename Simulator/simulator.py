@@ -790,6 +790,8 @@ class Simulator():
         plotAngles(np.array([quaternion_to_euler(delta_q(a[:4], QUAT_INITIAL)) for a in self.states]), "Euler angles", fileName="Euler.png")
         # plotAngles(np.array([quaternion_to_euler(*a[:4]) for a in self.filtered_states]), "Euler angles", fileName="Euler.png")
 
+        plot_xyz(self.torques, "Actuator Torques", fileName="Torques.png", ylabel="Torque (N*m)")
+
         plotState_xyz(self.filtered_states, True)
 
 
@@ -815,7 +817,6 @@ class Simulator():
         '''
         plot_xyz(self.mag_voltages, "Mag Voltages", fileName="MagVoltages.png", ylabel="Voltage (Volts)")
         plot_xyz(self.mag_currents, "Mag Currents", fileName="MagCurrents.png", ylabel="Current (Amps)")
-        plot_xyz(self.torques, "Mag Torques", fileName="MagTorques.png", ylabel="Torque (N*m)")
         plot_xyz(self.power_output, "Power Usage", fileName="Power_Output.png", ylabel="Power (Watts)")
         # plot_multiple_lines([self.totalPower],["Total Power"], "Total Power Output",fileName="Total_Power_Output.png",ylabel="Power (Watts)")
 
