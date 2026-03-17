@@ -74,7 +74,8 @@ def eoms(quaternion: np.ndarray, w_sat: np.ndarray, w_rw: np.ndarray, tau_sat: n
         # Friction damping from air drag (measured expirementally)
         w_sat_dot = w_sat_dot - 0.0041 * w_sat
 
-        # Might not be necessary to constrain the axes since the inertia is balanced?
+        # Since the inertia for the testbed is so balanced, this is not necessary and
+        # left out in case it breaks physics. Leaving here for posterity.
         # For the 1D test, constrain the dot to one axis while conserving momentum
         # magnitude = math.sqrt(w_sat_dot[0]**2 + w_sat_dot[1]**2 + w_sat_dot[2]**2)
         # # w_sat_dot = np.array([w_sat_dot[0] if FREEDOM_OF_MOVEMENT_AXES[0] else 0.0,

@@ -116,7 +116,7 @@ NADIR_INTERVAL = 2.0
 # Whether to run our unscented kalman filter or not
 RUN_UKF = False
 # for simple 1D testbed validation (with a suboption for detumble)
-RUNNING_1D = True
+RUNNING_1D = False
 # whether you're running in Debart with 3D rendering (check 3D settings at bottom if so)
 RUNNING_MAYA = False
 # 0 = only create pdf output, 1 = show 3D animation visualization, 2 = both, 3 = none
@@ -369,7 +369,8 @@ if (RUNNING_1D):
     
     # This inertia is so even the coupling term seems not to have a real effect
     # In other words, no need to take it out for 1d simulation
-    #inertia of bowling ball testbed in ?? (the np array is in kg m^2)
+    # Values from solidworks are from in grams * square millimeters,
+    # 1e-9 transforms them into kg * m^2 which is what the sim uses
     TESTBED_INERTIA = (1e-9) * np.array([[7502892.64, 7466.02, -35503.74],
                                           [7466.02, 10102694.40, 19858.13],
                                           [-35503.74, 19858.13, 7508309.50]])
