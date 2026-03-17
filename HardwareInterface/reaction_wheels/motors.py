@@ -20,7 +20,7 @@ import sys
 from USB_serial import USBSerialManager
 
 # Set this flag to True to use the Arduino for PWM control
-USING_ARDUINO = True
+USING_ARDUINO = False
 
 DAA = 17
 COMU = 24
@@ -32,6 +32,8 @@ DIRE = 22 # direction control
 # Direction control: low (0) is clockwise, high (1) is counterclockwise
 CW = 0
 CCW = 1
+
+MAX_PWM = 255
 
 NUMBER_POLE_PAIRS = 4
 
@@ -78,7 +80,8 @@ class ReactionWheel:
         #when 0 its clockwise
         self.pi.write(self.dire, 0)
         self.pi.write(self.daa, 0)
-        self.pi.write(self.comu, 0)
+        # comu should be hanging (disconnected)
+        self.pi.write(self.comu, 1) 
 
         if USING_ARDUINO:
             # devices = self.serial_manager.list_usb_devices()
@@ -120,14 +123,14 @@ class ReactionWheel:
             self.pi.write(self.dire, CW)
 
         self.pi.write(self.br, 0)
-        pwm_to_set = max(0, min(255, int(abs(speed_0_255))))
+        pwm_to_set = max(0, min(MAX_PWM, int(abs(speed_0_255))))
 
         if USING_ARDUINO:
             self.serial_manager.send_pwm_byte('motor_controller', pwm_to_set)
             #time.sleep(.5)
             #response = self.serial_manager
         else:
-            self.pi.hardware_PWM(self.pwm, 20000, int(pwm_to_set/255*1_000_000)) # this converts pwm (0-255) to duty cycle (0-1_000_000)
+            self.pi.hardware_PWM(self.pwm, 20000, int(pwm_to_set/MAX_PWM*1_000_000)) # this converts pwm (0-255) to duty cycle (0-1_000_000)
 
 
     def slow_down(self, total_time=1.0, final_stop_condition = False):
@@ -220,13 +223,13 @@ if __name__ == '__main__':
     # Keep checking freq in the background
     wheel.callback = pi.callback(FREQ, pigpio.RISING_EDGE, wheel.get_rpm_callback)
 
-    # 200 = ~700 rpm
-    # wheel.set_speed(300)
-    for i in range(0, 50, 5):
+    for i in range(0, MAX_PWM, 5):
        # print(wheel.getPWMFrequency())
         wheel.set_speed(i)
         print(f"RPM: {wheel.rpm:.2f}")
-        time.sleep(20/60)
+        time.sleep(10/60)
+    
+    time.sleep(3)
 
     wheel.kill()
     pi.stop()
