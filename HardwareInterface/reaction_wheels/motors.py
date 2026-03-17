@@ -119,7 +119,7 @@ class ReactionWheel:
                 stop/switch safely (brake)
                 set new duty cycle with pwm_to_set to actually run at requested speed.'''
             time.sleep(dir_switch_sleep)
-            self.slow_down(target_rpm=dir_switch_sleep, final_stop_condition=True)
+            self.slow_down(target_rpm=0, final_stop_condition=True)
             self.pi.write(self.dire, CCW)
             self.pi.write(self.br, 0) # release brake after switching direction
 
