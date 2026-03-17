@@ -24,6 +24,7 @@ pass output to the reaction wheels
 # add to path variable so that subdirectory modules can be imported
 import sys, os
 import csv
+import re
 
 # Find project root by going up directories until we find HardwareInterface folder
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -38,7 +39,8 @@ import Simulator.visualizer as simulator
 import time
 
 data = []
-gps_timestep = 0.1
+TARGET_GPS_INTERVAL = 1.0
+DEFAULT_CSV_TIMESTEP = 0.1
 
 #uptime varaibale while running TODO
 
@@ -53,6 +55,17 @@ def visualize_data(i, quaternion):
 
     simulator.game_visualize(np.array([quaternion]), i)
 
+def _parse_csv_timestep(metadata_row):
+    '''
+    Parse timestep from metadata line in CSV header, using regex.
+    Defaults to DEFAULT_CSV_TIMESTEP if not found.
+    '''
+    metadata_line = ",".join(metadata_row)
+    timestep_match = re.search(r"timestep\s*=\s*([0-9]*\.?[0-9]+)", metadata_line)
+    if timestep_match:
+        return float(timestep_match.group(1))
+    return DEFAULT_CSV_TIMESTEP
+
 def get_gps_at_timestamp(elapsed_time):
     '''
     Get GPS data closest to the given elapsed time.
@@ -66,19 +79,12 @@ def get_gps_at_timestamp(elapsed_time):
     if not data:
         return None
     
-    # Find closest timestamp in GPS data
-    closest_idx = 0
-    min_diff = float('inf')
-    
-    for idx, gps_row in enumerate(data):
-        timestamp = gps_row[0]
-        time_diff = abs(timestamp - elapsed_time)
-        if time_diff < min_diff:
-            min_diff = time_diff
-            closest_idx = idx
-    
+    # Use elapsed whole-second index so data is consumed at 1-second intervals.
+    sample_idx = int(elapsed_time // TARGET_GPS_INTERVAL)
+    sample_idx = max(0, min(sample_idx, len(data) - 1))
+
     # Return GPS data (skip timestamp, return [Bx, By, Bz, X, Y, Z])
-    return data[closest_idx][1:]
+    return data[sample_idx][1:]
 
 def read_csv():
     '''
@@ -98,26 +104,49 @@ def read_csv():
             Z (float): GPS position Z coordinate in ECEF frame (km)
     
     Sampling:
-        Reads every 10th row from the CSV to align with second marks
+        Computes row stride from CSV timestep metadata to enforce 1-second sampling.
     '''
     csv_path = os.path.join(project_root, "Simulator", "PySOL", "outputs", "1d_1orbit_tenth_s_gps.csv")
     with open(csv_path, "r", newline="") as f:
         reader = csv.reader(f)
         rows = list(reader)
+
+    if len(rows) < 3:
+        raise ValueError("GPS CSV is missing expected metadata/header rows.")
+
+    csv_timestep = _parse_csv_timestep(rows[0])
+    if csv_timestep <= 0:
+        raise ValueError(f"Invalid CSV timestep: {csv_timestep}")
+
+    sample_stride = max(1, int(round(TARGET_GPS_INTERVAL / csv_timestep)))
+    sampled_interval = sample_stride * csv_timestep
+    if abs(sampled_interval - TARGET_GPS_INTERVAL) > 1e-6:
+        print(
+            f"Warning: nearest possible interval is {sampled_interval:.6f}s, not exactly {TARGET_GPS_INTERVAL:.1f}s"
+        )
     
     # Skip header lines (orbital params line and column names line)
     data_rows = rows[2:]
-    
-    # Sample every 10th row (aligns with second marks)
-    for idx, row in enumerate(data_rows[::10]):
-        # Calculate timestamp: which data row this is * timestep
-        row_index = idx * 10
-        timestamp = row_index * gps_timestep
-        
+
+    data.clear()
+    for row_index in range(0, len(data_rows), sample_stride):
+        row = data_rows[row_index]
+        timestamp = row_index * csv_timestep
+
         # Convert each string element to float (preserves scientific notation)
         converted_row = [timestamp] + [float(item) for item in row]
         data.append(converted_row)
-    print(data)
+
+    print(
+        f"Loaded {len(data)} GPS rows at {sampled_interval:.3f}s interval from {os.path.basename(csv_path)}"
+    )
+
+    if len(data) >= 2:
+        measured_interval = data[1][0] - data[0][0]
+        check_status = "PASS" if abs(measured_interval - TARGET_GPS_INTERVAL) <= 1e-6 else "FAIL"
+        print(
+            f"GPS interval check: expected {TARGET_GPS_INTERVAL:.3f}s, measured {measured_interval:.3f}s ({check_status})"
+        )
 
 
 '''
