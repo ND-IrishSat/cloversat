@@ -149,6 +149,49 @@ def read_csv():
         )
 
 
+def init_reaction_wheel():
+    '''
+    Initialize reaction wheel control if dependencies and hardware are available.
+    Returns (pi, wheel) or (None, None) when wheel control is unavailable.
+    '''
+    try:
+        import importlib
+        pigpio = importlib.import_module("pigpio")
+        from HardwareInterface.reaction_wheels import motors as rw_motors
+    except Exception as exc:
+        print(f"Reaction wheel import unavailable: {exc}")
+        return None, None
+
+    pi = pigpio.pi()
+    if not pi.connected:
+        print("Reaction wheel disabled: pigpio daemon not running.")
+        return None, None
+
+    wheel = rw_motors.ReactionWheel(
+        pi,
+        rw_motors.DAA,
+        rw_motors.COMU,
+        rw_motors.FREQ,
+        rw_motors.PWM,
+        rw_motors.BR,
+        rw_motors.DIRE,
+    )
+    wheel.callback = pi.callback(rw_motors.FREQ, pigpio.RISING_EDGE, wheel.get_rpm_callback)
+    return pi, wheel
+
+
+def wheel_command_for_step(step_idx, total_steps):
+    '''
+    Simple command profile to verify wheel communication in bertha loop.
+    '''
+    third = max(1, total_steps // 3)
+    if step_idx < third:
+        return 40
+    if step_idx < 2 * third:
+        return -40
+    return 0
+
+
 '''
 read VN100 Software Documentation from documentation folder in SDK->python folder
 
@@ -161,57 +204,81 @@ if __name__ == "__main__":
     start = time.time()
     read_csv()
 
-    # ==============================================================================
-    # connect to VN100 IMU. run setup.py if needed, check and print sensor info, etc
+    pi = None
+    wheel = None
+    try:
+        # Connect to VN100 IMU.
+        vn.connect("COM5")
 
-	# declare sensor object
-    vn.connect("COM5")
+        # Optional wheel setup: script still runs if wheel stack is unavailable.
+        pi, wheel = init_reaction_wheel()
 
-    # count = 100
-    # file_name = "test.txt"
-    # vn.print_data_to_file(count, file_name)
-    # print 'count' counts of data into the file with name 'file_name'
+        count = 50
+        file_name = "bertha_imu_wheel_log.csv"
+        file_path = os.path.join(project_root, "Main", "HardwareScripts", file_name)
 
-    # vn.disconnect()
+        with open(file_path, "w", newline="") as log_file:
+            writer = csv.writer(log_file)
+            writer.writerow(
+                [
+                    "elapsed_s",
+                    "q_w",
+                    "q_x",
+                    "q_y",
+                    "q_z",
+                    "wheel_cmd",
+                    "wheel_rpm",
+                    "gps_bx",
+                    "gps_by",
+                    "gps_bz",
+                    "gps_x",
+                    "gps_y",
+                    "gps_z",
+                ]
+            )
 
+            i = 0
+            while i < count:
+                quat = vn.read_quat()
+                elapsed = time.time() - start
 
-    # ==============================================================================
-    # once we're connected to IMU, set up a loop to read a stream of data
+                # GPS is assumed readable for now; if unavailable, keep row shape stable.
+                gps_data = get_gps_at_timestamp(elapsed)
+                gps_row = gps_data if gps_data is not None else ["", "", "", "", "", ""]
 
-    # keep track of our iteration count
-    i = 0
-    count = 50
-    file_name = "testing_new_library.txt"
-    f = open(file_name, "a+")
+                wheel_cmd = 0
+                wheel_rpm = ""
+                if wheel is not None:
+                    wheel_cmd = wheel_command_for_step(i, count)
+                    wheel.set_speed(wheel_cmd)
+                    wheel_rpm = wheel.rpm
 
-    while i < count:
+                print(f"step={i} quat={quat} wheel_cmd={wheel_cmd}")
+                visualize_data(i, quat)
 
-        quat = vn.read_quat()
-        elapsed = time.time() - start
-        gps_data = get_gps_at_timestamp(elapsed)
-        
-        print(quat)
-        visualize_data(i, quat)
+                writer.writerow(
+                    [
+                        elapsed,
+                        quat[0],
+                        quat[1],
+                        quat[2],
+                        quat[3],
+                        wheel_cmd,
+                        wheel_rpm,
+                    ]
+                    + gps_row
+                )
 
-        i += 1
+                i += 1
 
-        #time.sleep(.1)
-        #print("")
-		#save to text file in form of magnetometer (magnetic field), angular velocity (gyroscope), and acceleration (accelerometer)
-        f.write(vn.get_mag_gyro_quat()) # put mag, gyro, quat data into text file
-        if gps_data:
-            f.write(gps_data)
-        if (i < count):
-            f.write("\n") # add newline to separate data sets
-        # optional: save to text file in form of magnetometer (magnetic field), angular velocity (gyroscope), and acceleration (accelerometer)
-    f.write("\n")
-    f.write(str(time.time() - start))
-    f.close()
-    #source = f'./{file_name}'
-    #destination = './new_sensor_tests'
-    #os.rename(source, destination)
+        print(f"Saved run log to {file_path}")
 
-    vn.print_data_to_file(count, "another_test.txt")
-
-    vn.disconnect()
-    # ==============================================================================
+    finally:
+        if wheel is not None:
+            wheel.kill()
+        if pi is not None:
+            pi.stop()
+        try:
+            vn.disconnect()
+        except Exception as exc:
+            print(f"VN100 disconnect warning: {exc}")
