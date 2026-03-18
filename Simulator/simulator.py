@@ -585,7 +585,8 @@ class Simulator():
             # angular_velocity = self.data[i][3:]
             # TARGET_SPEED = np.array([math.radians(10), 0, 0])
             # self.pwms[i] = self.controller.pd_velocity_controller(TARGET_SPEED, angular_velocity)
-            # self.mode[i] = PROTOCOL_MAP['target_point']
+
+            self.mode[i] = PROTOCOL_MAP['target_point']
 
             # if RUNNING_1D:
                 # # for 1D test, use simple custom controller
