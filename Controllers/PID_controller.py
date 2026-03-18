@@ -70,14 +70,26 @@ class PIDController:
         # alternatively, we could use the derivative of the error quaternion (using last error)
         derivative = -self.kd * omega
 
-        # print("p: ", proportional)
-        # print("i: ", self.integral_error)
-        # print("d: ", derivative)
-
         # integral is striclty increasing. Are the error quat signs off or is that correct behavior
         # Total control output (torque command)
         L = proportional + integral + derivative
+        return self.torque_to_pwm(L)
+    
+    def pd_velocity_controller(self, target_speed, current_speed):
+        '''
+        PD controller to compute PWM signals for reaction wheels. No integral term.
 
+        @params:
+            target_speed: Desired angular velocity of cubesat (3 x 1)
+            current_speed: Current angular velocity of cubesat (3 x 1)
+        '''
+
+        kd = 0.5
+        L = kd * (target_speed - current_speed)
+        return self.torque_to_pwm(L)
+    
+
+    def torque_to_pwm(self, L):
         # Reaction wheel transformation matrix for the NASA configuration
         alpha = 1 / np.sqrt(3)
         beta = 1 / np.sqrt(3)
