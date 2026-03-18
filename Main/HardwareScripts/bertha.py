@@ -25,6 +25,7 @@ pass output to the reaction wheels
 import sys, os
 import csv
 import re
+import threading
 
 # Find project root by going up directories until we find HardwareInterface folder
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -41,8 +42,17 @@ import time
 data = []
 TARGET_GPS_INTERVAL = 1.0
 DEFAULT_CSV_TIMESTEP = 0.1
+LOG_EVERY_STEPS = 5
 
 #uptime varaibale while running TODO
+
+
+def log_status(message, level="INFO"):
+    '''
+    Print timestamped runtime status for quick operator visibility.
+    '''
+    timestamp = time.strftime("%H:%M:%S")
+    print(f"[{timestamp}] [{level}] {message}")
 
 def visualize_data(i, quaternion):
     '''
@@ -107,6 +117,7 @@ def read_csv():
         Computes row stride from CSV timestep metadata to enforce 1-second sampling.
     '''
     csv_path = os.path.join(project_root, "Simulator", "PySOL", "outputs", "1d_1orbit_tenth_s_gps.csv")
+    log_status(f"Loading GPS data from {csv_path}")
     with open(csv_path, "r", newline="") as f:
         reader = csv.reader(f)
         rows = list(reader)
@@ -121,8 +132,10 @@ def read_csv():
     sample_stride = max(1, int(round(TARGET_GPS_INTERVAL / csv_timestep)))
     sampled_interval = sample_stride * csv_timestep
     if abs(sampled_interval - TARGET_GPS_INTERVAL) > 1e-6:
-        print(
+        log_status(
             f"Warning: nearest possible interval is {sampled_interval:.6f}s, not exactly {TARGET_GPS_INTERVAL:.1f}s"
+            ,
+            level="WARN"
         )
     
     # Skip header lines (orbital params line and column names line)
@@ -137,15 +150,17 @@ def read_csv():
         converted_row = [timestamp] + [float(item) for item in row]
         data.append(converted_row)
 
-    print(
+    log_status(
         f"Loaded {len(data)} GPS rows at {sampled_interval:.3f}s interval from {os.path.basename(csv_path)}"
     )
 
     if len(data) >= 2:
         measured_interval = data[1][0] - data[0][0]
         check_status = "PASS" if abs(measured_interval - TARGET_GPS_INTERVAL) <= 1e-6 else "FAIL"
-        print(
-            f"GPS interval check: expected {TARGET_GPS_INTERVAL:.3f}s, measured {measured_interval:.3f}s ({check_status})"
+        level = "INFO" if check_status == "PASS" else "WARN"
+        log_status(
+            f"GPS interval check: expected {TARGET_GPS_INTERVAL:.3f}s, measured {measured_interval:.3f}s ({check_status})",
+            level=level,
         )
 
 
@@ -154,30 +169,37 @@ def init_reaction_wheel():
     Initialize reaction wheel control if dependencies and hardware are available.
     Returns (pi, wheel) or (None, None) when wheel control is unavailable.
     '''
+    log_status("Initializing reaction wheel interface")
     try:
         import importlib
         pigpio = importlib.import_module("pigpio")
         from HardwareInterface.reaction_wheels import motors as rw_motors
     except Exception as exc:
-        print(f"Reaction wheel import unavailable: {exc}")
+        log_status(f"Reaction wheel import unavailable: {exc}", level="WARN")
         return None, None
 
     pi = pigpio.pi()
     if not pi.connected:
-        print("Reaction wheel disabled: pigpio daemon not running.")
+        log_status("Reaction wheel disabled: pigpio daemon not running.", level="WARN")
         return None, None
 
-    wheel = rw_motors.ReactionWheel(
-        pi,
-        rw_motors.DAA,
-        rw_motors.COMU,
-        rw_motors.FREQ,
-        rw_motors.PWM,
-        rw_motors.BR,
-        rw_motors.DIRE,
-    )
-    wheel.callback = pi.callback(rw_motors.FREQ, pigpio.RISING_EDGE, wheel.get_rpm_callback)
-    return pi, wheel
+    try:
+        wheel = rw_motors.ReactionWheel(
+            pi,
+            rw_motors.DAA,
+            rw_motors.COMU,
+            rw_motors.FREQ,
+            rw_motors.PWM,
+            rw_motors.BR,
+            rw_motors.DIRE,
+        )
+        wheel.callback = pi.callback(rw_motors.FREQ, pigpio.RISING_EDGE, wheel.get_rpm_callback)
+        log_status("Reaction wheel connection established")
+        return pi, wheel
+    except Exception as exc:
+        log_status(f"Reaction wheel initialization failed: {exc}", level="WARN")
+        pi.stop()
+        return None, None
 
 
 def wheel_command_for_step(step_idx, total_steps):
@@ -192,6 +214,77 @@ def wheel_command_for_step(step_idx, total_steps):
     return 0
 
 
+def list_available_com_ports():
+    '''
+    Return detected serial COM ports, or an empty list if enumeration is unavailable.
+    '''
+    try:
+        import importlib
+        list_ports = importlib.import_module("serial.tools.list_ports")
+    except Exception:
+        return []
+
+    return sorted(port.device for port in list_ports.comports())
+
+
+def resolve_vn100_port(available_ports):
+    '''
+    Determine VN100 serial port by precedence:
+      1) VN100_PORT environment variable
+      2) Linux auto-detect (/dev/ttyUSB* or /dev/ttyACM*)
+      3) platform default
+
+    Returns:
+        (port: str, source: str)
+    '''
+    env_port = os.getenv("VN100_PORT")
+    if env_port:
+        return env_port, "env"
+
+    if sys.platform.startswith("linux"):
+        for prefix in ("/dev/ttyUSB", "/dev/ttyACM"):
+            for port in available_ports:
+                if port.startswith(prefix):
+                    return port, "linux-auto"
+        return "/dev/ttyUSB0", "linux-default"
+
+    if sys.platform.startswith("win"):
+        return "COM5", "windows-default"
+
+    return "COM5", "fallback-default"
+
+
+def connect_vn100_with_timeout(port, timeout_seconds=5.0):
+    '''
+    Connect to VN100 with a timeout so missing hardware does not block indefinitely.
+
+    Returns:
+        (connected: bool, message: str)
+    '''
+    result = {"connected": False, "error": None}
+
+    def _worker():
+        try:
+            result["connected"] = vn.connect(port) is True
+        except Exception as exc:
+            result["error"] = exc
+
+    worker = threading.Thread(target=_worker, daemon=True)
+    worker.start()
+    worker.join(timeout_seconds)
+
+    if worker.is_alive():
+        return False, f"timeout after {timeout_seconds:.1f}s while opening {port}"
+
+    if result["error"] is not None:
+        return False, str(result["error"])
+
+    if not result["connected"]:
+        return False, "sensor did not verify connectivity"
+
+    return True, "connected"
+
+
 '''
 read VN100 Software Documentation from documentation folder in SDK->python folder
 
@@ -201,21 +294,55 @@ https://www.vectornav.com/downloader?file=https://www.vectornav.com/docs/default
 '''
 
 if __name__ == "__main__":
+    log_status("Starting BERTHA hardware script")
     start = time.time()
     read_csv()
 
     pi = None
     wheel = None
+    vn_connected = False
     try:
         # Connect to VN100 IMU.
-        vn.connect("COM5")
+        available_ports = list_available_com_ports()
+        vn_port, vn_port_source = resolve_vn100_port(available_ports)
+        log_status(f"Selected VN100 port {vn_port} ({vn_port_source})")
+        log_status(f"Attempting VN100 connection on {vn_port}")
+
+        if available_ports:
+            log_status(f"Detected COM ports: {', '.join(available_ports)}")
+            if vn_port not in available_ports:
+                log_status(
+                    f"VN100 connection failed: {vn_port} not found in detected COM ports",
+                    level="ERROR",
+                )
+                raise RuntimeError("VN100 not connected")
+        else:
+            log_status(
+                "Unable to enumerate COM ports; continuing with direct connect attempt",
+                level="WARN",
+            )
+
+        connected, connect_message = connect_vn100_with_timeout(vn_port, timeout_seconds=5.0)
+        if not connected:
+            log_status(
+                f"VN100 connection failed: {connect_message}",
+                level="ERROR",
+            )
+            raise RuntimeError("VN100 not connected")
+        vn_connected = True
+        log_status(f"VN100 connection established on {vn_port}")
 
         # Optional wheel setup: script still runs if wheel stack is unavailable.
         pi, wheel = init_reaction_wheel()
+        if wheel is None:
+            log_status("Running without reaction wheel control", level="WARN")
+        else:
+            log_status("Reaction wheel control active")
 
         count = 50
         file_name = "bertha_imu_wheel_log.csv"
         file_path = os.path.join(project_root, "Main", "HardwareScripts", file_name)
+        log_status(f"Writing telemetry log to {file_path}")
 
         with open(file_path, "w", newline="") as log_file:
             writer = csv.writer(log_file)
@@ -236,8 +363,11 @@ if __name__ == "__main__":
                     "gps_z",
                 ]
             )
+            log_status("CSV header written")
 
             i = 0
+            previous_quat = None
+            previous_wheel_cmd = None
             while i < count:
                 quat = vn.read_quat()
                 elapsed = time.time() - start
@@ -247,13 +377,23 @@ if __name__ == "__main__":
                 gps_row = gps_data if gps_data is not None else ["", "", "", "", "", ""]
 
                 wheel_cmd = 0
-                wheel_rpm = ""
+                wheel_rpm = None
                 if wheel is not None:
                     wheel_cmd = wheel_command_for_step(i, count)
                     wheel.set_speed(wheel_cmd)
-                    wheel_rpm = wheel.rpm
+                    wheel_rpm = float(wheel.rpm)
 
-                print(f"step={i} quat={quat} wheel_cmd={wheel_cmd}")
+                quat_delta = 0.0
+                if previous_quat is not None:
+                    quat_delta = sum(abs(a - b) for a, b in zip(quat, previous_quat))
+
+                if i % LOG_EVERY_STEPS == 0 or wheel_cmd != previous_wheel_cmd:
+                    rpm_text = "n/a" if wheel_rpm is None else f"{wheel_rpm:.2f}"
+                    gps_text = "available" if gps_data is not None else "missing"
+                    log_status(
+                        f"step {i + 1}/{count} elapsed={elapsed:.2f}s wheel_cmd={wheel_cmd} rpm={rpm_text} quat_delta={quat_delta:.6f} gps={gps_text}"
+                    )
+
                 visualize_data(i, quat)
 
                 writer.writerow(
@@ -264,21 +404,36 @@ if __name__ == "__main__":
                         quat[2],
                         quat[3],
                         wheel_cmd,
-                        wheel_rpm,
+                        "" if wheel_rpm is None else wheel_rpm,
                     ]
                     + gps_row
                 )
 
+                previous_quat = quat
+                previous_wheel_cmd = wheel_cmd
                 i += 1
 
-        print(f"Saved run log to {file_path}")
+        log_status(f"Run complete. Saved log to {file_path}")
+
+    except Exception as exc:
+        if not vn_connected:
+            log_status("VN100 did not connect. Check sensor power, cable, and COM port.", level="ERROR")
+        log_status(f"Runtime error: {exc}", level="ERROR")
+        sys.exit(1)
 
     finally:
+        log_status("Beginning shutdown")
         if wheel is not None:
+            log_status("Stopping reaction wheel")
             wheel.kill()
         if pi is not None:
+            log_status("Stopping pigpio handle")
             pi.stop()
-        try:
-            vn.disconnect()
-        except Exception as exc:
-            print(f"VN100 disconnect warning: {exc}")
+        if vn_connected:
+            try:
+                vn.disconnect()
+                log_status("VN100 disconnected")
+            except Exception as exc:
+                log_status(f"VN100 disconnect warning: {exc}", level="WARN")
+        else:
+            log_status("VN100 was not connected; skipping disconnect", level="WARN")
