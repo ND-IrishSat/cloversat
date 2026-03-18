@@ -66,7 +66,7 @@ EARTH_MAGNETIC_FIELD_LEO = 30e-6  # Average magnetic flux density in LEO [T]
 
 # total time to run sim (unrounded hours)
 # HOURS = ORBITAL_PERIOD / 3600
-HOURS = 0.03
+HOURS = 0.1
 print("simulation time: ", round(HOURS, 6), "hours")
 # total time to run sim (seconds)
 TF = int(HOURS * 3600)
@@ -259,7 +259,8 @@ if not DEGREES:
 # =======  REACTION WHEELS  ================================================
 
 # Pulse Width Modulation (PWM) signal that generates the max speed in our motors
-MAX_PWM = 65535
+# MAX_PWM = 65535
+MAX_PWM = 255
 # (TODO) max torque that our wheels can handle (Nm)
 MAX_RW_TORQUE = 0.02
 
@@ -366,7 +367,7 @@ if (RUNNING_1D):
     CUBESAT_BODY_INERTIA = TESTBED_INERTIA
     CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
     '''
-    
+
     # This inertia is so even the coupling term seems not to have a real effect
     # In other words, no need to take it out for 1d simulation
     # Values from solidworks are from in grams * square millimeters,

@@ -74,7 +74,8 @@ class PIDController:
         # Total control output (torque command)
         L = proportional + integral + derivative
         return self.torque_to_pwm(L)
-    
+
+
     def pd_velocity_controller(self, target_speed, current_speed):
         '''
         PD controller to compute PWM signals for reaction wheels. No integral term.
@@ -84,10 +85,12 @@ class PIDController:
             current_speed: Current angular velocity of cubesat (3 x 1)
         '''
 
-        kd = 0.5
-        L = kd * (target_speed - current_speed)
+        kp = 1e-3
+        kd = .5e-3
+        # derivative term relates to the rate of change of the error, which can be thought of as the current speed
+        L = kp * (current_speed - target_speed) - kd * current_speed
         return self.torque_to_pwm(L)
-    
+
 
     def torque_to_pwm(self, L):
         # Reaction wheel transformation matrix for the NASA configuration
@@ -112,17 +115,14 @@ class PIDController:
         # temporary fix to remove some variability
         # motor_torques = np.append(L, np.array([0]))
 
-        # PWM calculation: Map torque to PWM values
-        max_torque = MAX_RW_TORQUE
-
         # Map the torque output to PWM range
-        pwm = (motor_torques / max_torque) * MAX_PWM
+        pwm = (motor_torques / MAX_RW_TORQUE) * MAX_PWM
 
         # Convert to integer values for actual PWM signals
         pwm = np.array([int(p) for p in pwm])
 
         # Ensure PWM is within bounds of motor constraints
-        pwm = np.clip(pwm, -MAX_PWM * 0.5, MAX_PWM * 0.5)
+        pwm = np.clip(pwm, -MAX_PWM * 0.75, MAX_PWM * 0.75)
 
         # pwm = np.array([0, 3000, 0, 0])
 

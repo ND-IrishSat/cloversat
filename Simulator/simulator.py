@@ -580,7 +580,12 @@ class Simulator():
 
             # Run PD controller to generate output for reaction wheels based on target orientation
             self.pwms[i] = self.controller.pid_controller(quaternion, TARGET, omega, self.pwms[i-1])
-            self.mode[i] = PROTOCOL_MAP['target_point']
+
+            # TODO: make this its own mode
+            # angular_velocity = self.data[i][3:]
+            # TARGET_SPEED = np.array([math.radians(10), 0, 0])
+            # self.pwms[i] = self.controller.pd_velocity_controller(TARGET_SPEED, angular_velocity)
+            # self.mode[i] = PROTOCOL_MAP['target_point']
 
             # if RUNNING_1D:
                 # # for 1D test, use simple custom controller
