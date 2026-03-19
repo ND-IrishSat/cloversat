@@ -23,7 +23,7 @@ DEGREES = False
 
 QUAT_INITIAL = np.array([1.0, 0.0, 0.0, 0.0])
 # degrees/s. Detumbling starts at ~15 deg/s
-VELOCITY_INITIAL = np.array([0.0, 0.0, 0.0])
+VELOCITY_INITIAL = np.array([15.0, 15.0, 15.0])
 # convert to rad/s
 if not DEGREES:
     VELOCITY_INITIAL *= math.pi / 180
@@ -32,7 +32,7 @@ RW_VOLTAGES_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
 MAG_CURRENT_INITIAL = np.array([0.0, 0.0, 0.0])
 MAG_VOLTAGE_INITIAL = np.array([0.0, 0.0, 0.0])
 RW_INITIAL = np.array([0.0, 0.0, 0.0, 0.0])
-STARTING_PROTOCOL = "target_point" # "detumble", "point", "target_point", "idle"
+STARTING_PROTOCOL = "detumble" # "detumble", "point", "target_point", "idle"
 PROTOCOL_MAP = {"demagnetize": -2, "detumble": -1, "idle": 0, "point": 1, "target_point": 2}
 
 # ============  ORBITAL DYNAMICS  ==================================================
@@ -66,7 +66,7 @@ EARTH_MAGNETIC_FIELD_LEO = 30e-6  # Average magnetic flux density in LEO [T]
 
 # total time to run sim (unrounded hours)
 # HOURS = ORBITAL_PERIOD / 3600
-HOURS = 0.1
+HOURS = 0.75
 print("simulation time: ", round(HOURS, 6), "hours")
 # total time to run sim (seconds)
 TF = int(HOURS * 3600)
@@ -80,10 +80,10 @@ if not DEGREES:
     DETUMBLE_THRESHOLD *= math.pi / 180
 
 # bitmask that represents whether we have wheels on x, y, z, or skew axes
-RW_AXES = np.array([1, 1, 1, 0])
-MAG_AXES = np.array([0, 0, 0])
+RW_AXES = np.array([0, 0, 0, 0])
+MAG_AXES = np.array([1, 1, 1])
 # bitmask for which axes we can rotate about
-FREEDOM_OF_MOVEMENT_AXES = np.array([0, 0, 0])
+FREEDOM_OF_MOVEMENT_AXES = np.array([1, 1, 1])
 
 STATE_SPACE_DIMENSION = 7
 MEASUREMENT_SPACE_DIMENSION = 6
@@ -91,11 +91,11 @@ MEASUREMENT_SPACE_DIMENSION = 6
 # whether to generate new pySOL data or not
 GENERATE_NEW = False
 # csv to get pre-generated pysol b field from
-# B_FIELD_CSV_FILE = "leo_oe_10.csv"
+B_FIELD_CSV_FILE = "leo_oe_10.csv"
 # B_FIELD_CSV_FILE = "1_and_half_orbit.csv" # .05 timestep
 # B_FIELD_CSV_FILE = "1_and_half_orbit_quarter.csv" # .025 timestep
 # B_FIELD_CSV_FILE = "1_orbit.csv" # .1 timestep
-B_FIELD_CSV_FILE = "1d_1orbit_tenth_s_gps.csv" # .1 timestep, aligns with 1D PySOL generation
+# B_FIELD_CSV_FILE = "1d_1orbit_tenth_s_gps.csv" # .1 timestep, aligns with 1D PySOL generation
 
 # if false, use PySOL to calculate orbital magnetic field
 CONSTANT_B_FIELD = False
@@ -221,7 +221,7 @@ KI = 1e-4                   # Integral gain
 KD = 1e-3                   # Derivative gain
 
 if GYRO_WORKING:
-    K = 1.25e-4 # detumble gain on firmware
+    K = 3.25e-5 # detumble gain on firmware
     # proposed value for k for b-cross algorithm
     # k = 2 * 1/(rad(a^3/GM))(1+sinζ)λmin  "This is bcross" - also andrew
     # K = 2 * ((ORBITAL_ELEMENTS[1] * 1000 ) ** 3 / (GRAVITY_EARTH))**(-0.5) * (1 + math.sin(INCLINATION_RAD)) * min(CUBESAT_eigenvalues)

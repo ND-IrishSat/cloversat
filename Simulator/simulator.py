@@ -454,19 +454,19 @@ class Simulator():
             angularZ = abs(self.states[i - 1][6])
 
             if(self.finishedTime == -1) and i > 0:
-                if (thresholdLow <= angularX <= thresholdHigh) and (thresholdLow <= angularY <= thresholdHigh) and (thresholdLow <= angularZ <= thresholdHigh):
+                if (thresholdLow <= angularX <= thresholdHigh) and (thresholdLow <= angularY <= thresholdHigh) and (thresholdLow <= angularZ <= thresholdHigh) and self.finishedTime == -1:
                     print("Successfully detumbled after " + str(i*self.dt) + " seconds!")
                     # record first time we hit "detumbled" threshold (seconds)
                     self.finishedTime = i*self.dt
 
-                    # When the "detumbled" threshold is hit, calculate total Energy
-                    # Total Energy is calculated as a "Rieman Sum" of the total power used at each time step multiplied by the time step
-                    for step in range(i):
-                        self.energy = self.energy + self.totalPower[step]*self.dt
+                    # # When the "detumbled" threshold is hit, calculate total Energy
+                    # # Total Energy is calculated as a "Rieman Sum" of the total power used at each time step multiplied by the time step
+                    # for step in range(i):
+                    #     self.energy = self.energy + self.totalPower[step]*self.dt
 
                     # move to nadir pointing protocol
                     # return "point"
-                    return "idle"
+                    return "detumble"
 
             return "detumble"
 

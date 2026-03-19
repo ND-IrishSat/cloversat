@@ -95,6 +95,10 @@ def main():
 
         i += 1
 
+    # Total Energy is calculated as a "Rieman Sum" of the total power used at each time step multiplied by the time step
+    for step in range(i):
+        sim.energy = sim.energy + sim.totalPower[step]*sim.dt
+
     sim.plot_and_viz_results()
 
 
