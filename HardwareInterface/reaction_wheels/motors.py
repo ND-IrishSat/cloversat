@@ -181,10 +181,7 @@ class ReactionWheel:
             self.pi.hardware_PWM(self.pwm, 20000, new_duty)
             time.sleep(sleep_dt)
         self.pi.hardware_PWM(self.pwm, 20000, 0) # ensure motor is fully stopped
-        if final_stop_condition:
-            self.pi.write(self.br, 1)
-        else:
-            self.pi.write(self.br, 0) # release brake after slowing down
+        self.pi.write(self.br, 0) # release brake after slowing down
 
     def getPWMFrequency(self):
         return self.pi.get_PWM_frequency(self.pwm)
