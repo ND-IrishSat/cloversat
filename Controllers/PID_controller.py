@@ -76,7 +76,7 @@ class PIDController:
         return self.torque_to_pwm(L)
 
 
-    def pd_velocity_controller(self, target_speed, current_speed):
+    def pd_velocity_controller(self, target_speed, current_speed, kp, kd):
         '''
         PD controller to compute PWM signals for reaction wheels. No integral term.
 
@@ -84,9 +84,6 @@ class PIDController:
             target_speed: Desired angular velocity of cubesat (3 x 1)
             current_speed: Current angular velocity of cubesat (3 x 1)
         '''
-
-        kp = 1e-3
-        kd = .5e-3
         # derivative term relates to the rate of change of the error, which can be thought of as the current speed
         L = kp * (current_speed - target_speed) - kd * current_speed
         return self.torque_to_pwm(L)

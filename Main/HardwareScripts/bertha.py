@@ -22,6 +22,8 @@ import numpy as np
 
 import HardwareInterface.vn100.vn100_interface as vn
 import Simulator.visualizer as simulator
+import Controllers.PID_controller as pid_controller
+from params import *
 
 TARGET_GPS_INTERVAL = 1.0
 DEFAULT_CSV_TIMESTEP = 0.1
@@ -233,10 +235,25 @@ if __name__ == "__main__":
                 wheel_cmd = 0
                 wheel_rpm = None
                 if wheel is not None:
-                    if i < third:
-                        wheel_cmd = 40
-                    elif i < 2 * third:
-                        wheel_cmd = -40
+                    command_law = "point" # "point", "spin", "constant", "off"
+                    if command_law == "constant":
+                        wheel_cmd = 40 # hardcode for now
+
+                    elif command_law == "spin":
+                        kp = 1e-3
+                        kd = .5e-3
+                        pid = pid_controller.PIDController()
+                        target_speed = np.array([10.0, 0.0, 0.0]) # degrees/s
+                        wheel_cmd = pid.pd_velocity_controller(target_speed=target_speed, current_speed=vn.read_gyro(), kp=kp, kd=kd)
+                        wheel_cmd = wheel_cmd[0] # only command x-axis wheel for now
+                    
+                    elif command_law == "point":
+                        DT = 1
+                        controller = pid.PIDController(KP, KI, KD, DT)
+                        wheel_cmd = controller.pid_controller(quat, TARGET, vn.read_gyro())
+                        wheel_cmd = wheel_cmd[0] # only command x-axis wheel for now
+
+                    print("PID command: ", wheel_cmd)
                     wheel.set_speed(wheel_cmd)
                     wheel_rpm = float(wheel.rpm)
 
