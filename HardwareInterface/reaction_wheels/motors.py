@@ -1,7 +1,6 @@
 '''
-
 motors.py
-Authors: Rawan, Nic, Michael P, Andrew
+Authors: Rawan, Nic R, Michael P, Andrew
 
 Class for interfacing with reaction wheel motors and Irishat control board
 
@@ -67,7 +66,6 @@ class ReactionWheel:
         self.pi.set_pull_up_down(self.freq, pigpio.PUD_UP)
         self.pi.set_glitch_filter(self.freq, 300)
 
-
         #output pins from the PI to the wheels pi. set_mode(self.pwm, pigpio.OUTPUT)
         self.pi.set_mode(self.pwm, pigpio.OUTPUT)
         self.pi.set_mode(self.daa, pigpio.OUTPUT)
@@ -81,7 +79,7 @@ class ReactionWheel:
         self.pi.write(self.dire, 0)
         self.pi.write(self.daa, 0)
         # comu should be hanging (disconnected)
-        self.pi.write(self.comu, 1) 
+        self.pi.write(self.comu, 1)
 
         if USING_ARDUINO:
             # devices = self.serial_manager.list_usb_devices()
@@ -98,38 +96,37 @@ class ReactionWheel:
             # Initialize hardware PWM OFF
             self.pi.hardware_PWM(self.pwm, 20000, 0)
 
-        time.sleep(0.1)
+        time.sleep(0.3)
 
 
-    def set_speed(self, speed_0_255: int):
+    def set_speed(self, pwm_input: int):
         '''
-        Set motors to specified speed
+        Set motors to specified pwm speed (-255 to 255)
         If negative speed, set direction to counterclockwise, otherwise clockwise
         Then set the PWM pin duty cycle to absolute value of speed, converted to duty cycle (0-1_000_000)
         '''
 
+        # Max time to wait for wheel to slow down (seconds)
         dir_switch_sleep = 2
 
         #check if sign of input is different than what we are now
         # If so, sleep for a bit to allow the motor to slow down before switching direction, then switch direction
         curr_dir = self.pi.read(DIRE)
-        if (speed_0_255 < 0 and curr_dir == CW):
+        if (pwm_input < 0 and curr_dir == CW):
             # Go from CC to CCW
             '''choose direction
                 stop/switch safely (brake)
                 set new duty cycle with pwm_to_set to actually run at requested speed.'''
-            time.sleep(dir_switch_sleep)
-            self.slow_down(target_rpm=0)
+            self.slow_down(target_rpm=0, max_time=dir_switch_sleep)
             self.pi.write(self.dire, CCW)
 
-        elif (speed_0_255 > 0 and curr_dir == CCW):
+        elif (pwm_input > 0 and curr_dir == CCW):
             # Go from CCW to CC
-            time.sleep(dir_switch_sleep)
-            self.slow_down(target_rpm=0)
+            self.slow_down(target_rpm=0, max_time=dir_switch_sleep)
             self.pi.write(self.dire, CW)
 
         self.pi.write(self.br, 0)
-        pwm_to_set = max(0, min(MAX_PWM, int(abs(speed_0_255))))
+        pwm_to_set = max(0, min(MAX_PWM, int(abs(pwm_input))))
 
         if USING_ARDUINO:
             self.serial_manager.send_pwm_byte('motor_controller', pwm_to_set)
@@ -139,34 +136,13 @@ class ReactionWheel:
             self.pi.hardware_PWM(self.pwm, 20000, int(pwm_to_set/MAX_PWM*1_000_000)) # this converts pwm (0-255) to duty cycle (0-1_000_000)
 
 
-    '''def slow_down(self, total_time=1.0, final_stop_condition = False):
-        current_duty = self.pi.get_PWM_dutycycle(self.pwm)
-        if current_duty <= 0:
-            if  final_stop_condition:
-                self.pi.write(self.br, 1)
-            return
-
-        time_increment = 60
-        delay = total_time / time_increment
-        step = max(1, int(current_duty / time_increment))  # depends on current duty cycle
-
-        self.pi.write(self.br, 0)  # release brake during ramp
-        duty = current_duty
-        while duty > 0:
-            duty = max(0, duty - step)
-            self.pi.hardware_PWM(self.pwm, 20000, duty)
-            time.sleep(delay)
-
-        if final_stop_condition:
-            self.pi.write(self.br, 1)
-            '''
     def slow_down(self, target_rpm=0.0, max_time=4.0):
-        target_rpm = abs(target_rpm)    
+        target_rpm = abs(target_rpm)
         step_duty = 20
         sleep_dt = 0.05
         start_time = time.time()
 
-        self.pi.write(self.br, 1)  # release brake during ramp
+        self.pi.write(self.br, 1)  # set brake so we slow down
 
         while True:
             current_rpm = abs(self.rpm)
@@ -174,13 +150,16 @@ class ReactionWheel:
                 break
             if time.time() - start_time > max_time:
                 break
-            current_duty = self.pi.get_PWM_dutycycle(self.pwm)
-            new_duty = max(0, current_duty - step_duty)
-            self.pi.hardware_PWM(self.pwm, 20000, new_duty)
+
+            if target_rpm != 0:
+                # slowly decrease wheel speed by reducing duty cycle in steps until we reach target RPM or max time
+                current_duty = self.pi.get_PWM_dutycycle(self.pwm)
+                new_duty = max(0, current_duty - step_duty)
+                self.pi.hardware_PWM(self.pwm, 20000, new_duty)
             time.sleep(sleep_dt)
-        
-        self.pi.hardware_PWM(self.pwm, 20000, 0) # ensure motor is fully stopped
+
         self.pi.write(self.br, 0) # release brake after slowing down
+
 
     def getPWMFrequency(self):
         return self.pi.get_PWM_frequency(self.pwm)
@@ -197,7 +176,7 @@ class ReactionWheel:
         else:
             self.pi.hardware_PWM(self.pwm, 20000, 0)
 
-        # TODO: why do we turn on break here?
+        # Set break to stop quickly
         self.pi.write(self.br, 1)
 
 
@@ -255,7 +234,7 @@ if __name__ == '__main__':
         wheel.set_speed(i)
         print(f"RPM: {wheel.rpm:.2f}")
         time.sleep(10/60)
-    
+
     time.sleep(3)
 
     wheel.kill()

@@ -28,7 +28,8 @@ from params import *
 TARGET_GPS_INTERVAL = 1.0
 DEFAULT_CSV_TIMESTEP = 0.1
 LOG_EVERY_STEPS = 5
-SAMPLE_COUNT = 50
+# How many iterations (54000 for entire GPS csv--basically infinite)
+SAMPLE_COUNT = 54000
 
 
 def log_status(message, level="INFO"):
@@ -222,7 +223,6 @@ if __name__ == "__main__":
 
             previous_quat = None
             previous_wheel_cmd = None
-            third = max(1, SAMPLE_COUNT // 3)
 
             for i in range(SAMPLE_COUNT):
                 quat = vn.read_quat()
@@ -235,7 +235,7 @@ if __name__ == "__main__":
                 wheel_cmd = 0
                 wheel_rpm = None
                 if wheel is not None:
-                    command_law = "point" # "point", "spin", "constant", "off"
+                    command_law = "point" # "point", "spin", "constant"
                     if command_law == "constant":
                         wheel_cmd = 40 # hardcode for now
 
@@ -246,14 +246,17 @@ if __name__ == "__main__":
                         target_speed = np.array([10.0, 0.0, 0.0]) # degrees/s
                         wheel_cmd = pid.pd_velocity_controller(target_speed=target_speed, current_speed=vn.read_gyro(), kp=kp, kd=kd)
                         wheel_cmd = wheel_cmd[0] # only command x-axis wheel for now
-                    
+
                     elif command_law == "point":
                         DT = 1
                         controller = pid.PIDController(KP, KI, KD, DT)
                         wheel_cmd = controller.pid_controller(quat, TARGET, vn.read_gyro())
                         wheel_cmd = wheel_cmd[0] # only command x-axis wheel for now
 
-                    print("PID command: ", wheel_cmd)
+                    else:
+                        wheel_cmd = 0
+
+                    print("PWM command: ", wheel_cmd)
                     wheel.set_speed(wheel_cmd)
                     wheel_rpm = float(wheel.rpm)
 
