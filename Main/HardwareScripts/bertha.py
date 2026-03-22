@@ -11,6 +11,7 @@ import errno
 import importlib
 import os
 import re
+import signal
 import sys
 import time
 
@@ -85,6 +86,48 @@ def load_gps_data():
     return sampled_rows
 
 
+def cleanup(wheel=None, wheel_callback=None, pi=None, vn_connected=False):
+    """Gracefully shutdown hardware resources."""
+    log_status("Beginning shutdown")
+    if wheel is not None:
+        try:
+            log_status("Stopping reaction wheel")
+            wheel.kill()
+        except Exception as exc:
+            log_status(f"Wheel shutdown warning: {exc}", level="WARN")
+
+    if wheel_callback is not None:
+        try:
+            wheel_callback.cancel()
+        except Exception as exc:
+            log_status(f"Wheel callback shutdown warning: {exc}", level="WARN")
+
+    if pi is not None:
+        log_status("Stopping pigpio handle")
+        pi.stop()
+
+    if vn_connected:
+        try:
+            vn.disconnect()
+            log_status("VN100 disconnected")
+        except Exception as exc:
+            log_status(f"VN100 disconnect warning: {exc}", level="WARN")
+    else:
+        log_status("VN100 was not connected; skipping disconnect", level="WARN")
+
+
+def signal_handler(sig, frame, wheel=None, wheel_callback=None, pi=None, vn_connected=False):
+    """Handle Ctrl+C gracefully."""
+    print("\nCtrl+C detected. Shutting down BERTHA...")
+    cleanup(wheel, wheel_callback, pi, vn_connected)
+    sys.exit(0)
+
+
+def register_signal_handler(wheel, wheel_callback, pi, vn_connected):
+    """Register the signal handler for graceful shutdown."""
+    signal.signal(signal.SIGINT, lambda sig, frame: signal_handler(sig, frame, wheel, wheel_callback, pi, vn_connected))
+
+
 def preflight_vn100_port_access(port):
     # Prevent native VN permission aborts by checking Linux serial access first.
     if not sys.platform.startswith("linux"):
@@ -115,7 +158,7 @@ def preflight_vn100_port_access(port):
     return True, "serial preflight passed"
 
 
-if __name__ == "__main__":
+def main():
     log_status("Starting BERTHA hardware script")
     start = time.time()
     gps_data = load_gps_data()
@@ -197,6 +240,9 @@ if __name__ == "__main__":
                 log_status("Reaction wheel control active")
         except Exception as exc:
             log_status(f"Running without reaction wheel control: {exc}", level="WARN")
+
+        # Register signal handler for graceful Ctrl+C shutdown
+        register_signal_handler(wheel, wheel_callback, pi, vn_connected)
 
         file_path = os.path.join(PROJECT_ROOT, "Main", "HardwareScripts", "bertha_imu_wheel_log.csv")
         log_status(f"Writing telemetry log to {file_path}")
@@ -296,29 +342,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     finally:
-        log_status("Beginning shutdown")
-        if wheel is not None:
-            try:
-                log_status("Stopping reaction wheel")
-                wheel.kill()
-            except Exception as exc:
-                log_status(f"Wheel shutdown warning: {exc}", level="WARN")
+        cleanup(wheel, wheel_callback, pi, vn_connected)
 
-        if wheel_callback is not None:
-            try:
-                wheel_callback.cancel()
-            except Exception as exc:
-                log_status(f"Wheel callback shutdown warning: {exc}", level="WARN")
 
-        if pi is not None:
-            log_status("Stopping pigpio handle")
-            pi.stop()
-
-        if vn_connected:
-            try:
-                vn.disconnect()
-                log_status("VN100 disconnected")
-            except Exception as exc:
-                log_status(f"VN100 disconnect warning: {exc}", level="WARN")
-        else:
-            log_status("VN100 was not connected; skipping disconnect", level="WARN")
+if __name__ == "__main__":
+    main()
