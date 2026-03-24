@@ -5,9 +5,9 @@ Simulator/PySOL/outputs/*
 Simulator/PySOL/save_sim/*
 *.exe
 Simulator/plotOutput/**
-interface/vn100/vn100_library/build/
-interface/vn100/vn100_library/dist/
-interface/vn100/vn100_library/vnpy.egg-info/
+HardwareInterface/vn100/vn100_library/build/
+HardwareInterface/vn100/vn100_library/dist/
+HardwareInterface/vn100/vn100_library/vnpy.egg-info/
 */.ipynb_checkpoints/*
 .DS_Store
 .ipynb_checkpoints/*
