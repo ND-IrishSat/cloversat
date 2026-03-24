@@ -215,7 +215,7 @@ def register_signal_handler(wheel):
     signal.signal(signal.SIGINT, lambda sig, frame: signal_handler(sig, frame, wheel))
 
 
-if __name__ == '__main__':
+def main():
     #stop and close functions
     pi = pigpio.pi()
     if not pi.connected:
@@ -229,14 +229,30 @@ if __name__ == '__main__':
     # Keep checking freq in the background
     wheel.callback = pi.callback(FREQ, pigpio.RISING_EDGE, wheel.get_rpm_callback)
 
+    wheel.set_speed(30)
+    print(f"RPM: {wheel.rpm:.2f}")
+    time.sleep(6)
+    wheel.set_speed(140)
+    print(f"RPM: {wheel.rpm:.2f}")
+    time.sleep(6)
+    wheel.set_speed(MAX_PWM)
+    print(f"RPM: {wheel.rpm:.2f}")
+    time.sleep(6)
+    wheel.kill()
+    pi.stop()
+    return
+
     for i in range(0, MAX_PWM, 5):
        # print(wheel.getPWMFrequency())
+        print(f"Setting PWM {i}")
         wheel.set_speed(i)
         print(f"RPM: {wheel.rpm:.2f}")
         time.sleep(10/60)
-
-    time.sleep(3)
+    wheel.set_speed(200)
+    time.sleep(10)
 
     wheel.kill()
     pi.stop()
 
+if __name__ == "__main__":
+    main()
