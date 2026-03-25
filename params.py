@@ -203,7 +203,8 @@ TRANSFORMATION = np.array([[1, 0, 0, 1/np.sqrt(3)],
 # =======  CONTROLS  =======================================
 
 # target orientation for if we're simulating controls
-TARGET = np.array([1.0, 0.0, 1.0, 0.0])
+TARGET = np.array([0.707, 0.0, 0.707, 0.0])
+#TARGET = np.array([0.0, 0.0, 1.0, 0.0])
 
 # Quaternion error tolerances define how close we need to be to our target orientation
 QUAT_ERROR_TOLERANCE = 0.01  # Maximum acceptable quaternion error magnitude

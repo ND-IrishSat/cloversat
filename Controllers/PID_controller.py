@@ -119,7 +119,7 @@ class PIDController:
         pwm = np.array([int(p) for p in pwm])
 
         # Ensure PWM is within bounds of motor constraints
-        pwm = np.clip(pwm, -MAX_PWM * 0.75, MAX_PWM * 0.75)
+        pwm = np.clip(pwm, -MAX_PWM * 1.0, MAX_PWM * 1.0)
 
         # pwm = np.array([0, 3000, 0, 0])
 

@@ -16,7 +16,7 @@ import time
 import pigpio
 import signal
 import sys
-from USB_serial import USBSerialManager
+# from USB_serial import USBSerialManager
 
 # Set this flag to True to use the Arduino for PWM control
 USING_ARDUINO = False
@@ -24,7 +24,7 @@ USING_ARDUINO = False
 DAA = 17
 COMU = 24
 FREQ = 27
-PWM = 12 # PWM input signal (used for pigpio PWM)
+PWM = 13 # PWM input signal (used for pigpio PWM)
 BR = 23 # BR is for brake control (breaks while high)
 DIRE = 22 # direction control
 
@@ -229,18 +229,18 @@ def main():
     # Keep checking freq in the background
     wheel.callback = pi.callback(FREQ, pigpio.RISING_EDGE, wheel.get_rpm_callback)
 
-    wheel.set_speed(30)
-    print(f"RPM: {wheel.rpm:.2f}")
-    time.sleep(6)
-    wheel.set_speed(140)
-    print(f"RPM: {wheel.rpm:.2f}")
-    time.sleep(6)
-    wheel.set_speed(MAX_PWM)
-    print(f"RPM: {wheel.rpm:.2f}")
-    time.sleep(6)
-    wheel.kill()
-    pi.stop()
-    return
+    #wheel.set_speed(30)
+    #print(f"RPM: {wheel.rpm:.2f}")
+    #time.sleep(6)
+    #wheel.set_speed(160)
+    #print(f"RPM: {wheel.rpm:.2f}")
+    #time.sleep(6)
+    #wheel.set_speed(MAX_PWM)
+    #print(f"RPM: {wheel.rpm:.2f}")
+    #time.sleep(6)
+    #wheel.kill()
+    #pi.stop()
+    #return
 
     for i in range(0, MAX_PWM, 5):
        # print(wheel.getPWMFrequency())
@@ -248,7 +248,7 @@ def main():
         wheel.set_speed(i)
         print(f"RPM: {wheel.rpm:.2f}")
         time.sleep(10/60)
-    wheel.set_speed(200)
+    
     time.sleep(10)
 
     wheel.kill()

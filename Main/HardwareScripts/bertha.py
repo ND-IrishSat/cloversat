@@ -24,6 +24,7 @@ import numpy as np
 import HardwareInterface.vn100.vn100_interface as vn
 import Simulator.visualizer as simulator
 import Controllers.PID_controller as pid_controller
+from Simulator.EOMs import *
 from params import *
 
 TARGET_GPS_INTERVAL = 1.0
@@ -219,6 +220,7 @@ def main():
         # Optional reaction wheel setup; loop still runs if unavailable.
         try:
             import pigpio
+            import serial
             from HardwareInterface.reaction_wheels import motors as rw_motors
 
             pi = pigpio.pi()
@@ -240,6 +242,7 @@ def main():
                 log_status("Reaction wheel control active")
         except Exception as exc:
             log_status(f"Running without reaction wheel control: {exc}", level="WARN")
+            return
 
         # Register signal handler for graceful Ctrl+C shutdown
         register_signal_handler(wheel, wheel_callback, pi, vn_connected)
@@ -286,18 +289,24 @@ def main():
                         wheel_cmd = 40 # hardcode for now
 
                     elif command_law == "spin":
-                        kp = 1e-3
-                        kd = .5e-3
-                        pid = pid_controller.PIDController()
-                        target_speed = np.array([10.0, 0.0, 0.0]) # degrees/s
-                        wheel_cmd = pid.pd_velocity_controller(target_speed=target_speed, current_speed=vn.read_gyro(), kp=kp, kd=kd)
-                        wheel_cmd = wheel_cmd[0] # only command x-axis wheel for now
+                        kp = 2e-1
+                        kd = 0.5e-1
+                        print("Speed: ", math.degrees(np.array(vn.read_gyro())[2]))
+                        pid = pid_controller.PIDController(kp, 0, kd, 0)
+                        target_speed = np.array([0.0, 0.0, -math.radians(10.0)]) # degrees/s
+                        wheel_cmd = pid.pd_velocity_controller(target_speed=target_speed, current_speed=np.array(vn.read_gyro()), kp=kp, kd=kd)
+                        #print(wheel_cmd)
+                        wheel_cmd = wheel_cmd[2] # only command x-axis wheel for now
 
                     elif command_law == "point":
-                        DT = 1
-                        controller = pid.PIDController(KP, KI, KD, DT)
-                        wheel_cmd = controller.pid_controller(quat, TARGET, vn.read_gyro())
-                        wheel_cmd = wheel_cmd[0] # only command x-axis wheel for now
+                        dt = 0.05
+                        kp = 3e-2
+                        kd = 5e-3
+                        ki = 1e-4
+                        controller = pid_controller.PIDController(kp, ki, kd, dt)
+                        omega = np.array(vn.read_gyro())
+                        wheel_cmd = controller.pid_controller(np.array(quat), normalize(TARGET), omega, [])
+                        wheel_cmd = wheel_cmd[2] # only command x-axis wheel for now
 
                     else:
                         wheel_cmd = 0
@@ -332,6 +341,7 @@ def main():
 
                 previous_quat = quat
                 previous_wheel_cmd = wheel_cmd
+                time.sleep(.05)
 
         log_status(f"Run complete. Saved log to {file_path}")
 
