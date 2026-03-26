@@ -20,7 +20,7 @@ This is not be confused with the `Magnetorquer_Sat` object, which contains WHAT 
 
 See `Main/` for examples of simulator usage, like `space_sim.py`. It first sets up/creates/initializes objects (like the 3 magnetorquers and the `Simulator`), then enters the 6-7 steps of the simulation loop (LOL).
 
-1. `generateDat_step`: generate fake sensor data by adding noise to our perfect state, which involves transforming the magnetic field from the earth frame to the body frame.
+1. `generateDat_step`: generate fake sensor data by adding noise to our perfect state, which involves transforming the magnetic field from the earth frame to the body frame. Stores current sensor data in `Magnetorquer_sat` object.
 
 2. Finding true nadir was used for Nearspace, not really needed anymore.
 

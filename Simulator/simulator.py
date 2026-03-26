@@ -385,6 +385,8 @@ class Simulator():
         Populates self.filtered_states[i]
 
         TODO: check i indices (where in the process is this done)
+        TODO: ensure only data from mag_sat is passed to kalmanMethod (and store current filtered_state in mag_sat?)
+        TODO: don't pass b_true, pass GPS instead. Add GPS generation to generateData_step too?
         '''
         start = time.time()
 
@@ -431,25 +433,21 @@ class Simulator():
                 # print(i, " mags on", self.magnetometerReadingTimer * self.dt, ", ", self.torquersOffTimer * self.dt)
                 self.magnetometerReadingTimer += 1.0
 
-        if RUNNING_1D and not DETUMBLE_1D:
-            # extract current quaternion and convert to euler angles
-            q = self.states[i - 1][:4]
-            x, y, z = quaternion_to_euler(q)
+        # if RUNNING_1D:
+        #     # extract current quaternion and convert to euler angles
+        #     q = self.states[i - 1][:4]
+        #     x, y, z = quaternion_to_euler(q)
 
-            # check if we've reached our desired angle for the first time
-            if (self.finishedTime == -1):
-                if (x<=DESIRED_ANGLE[0]):
-                    print("REACHED DESIRED ANGLE OF 90")
-                    self.finishedTime = i*self.dt
-                    print("Time needed is " + str(self.finishedTime))
+        #     # check if we've reached our desired angle for the first time
+        #     if (self.finishedTime == -1):
+        #         if (x<=DESIRED_ANGLE[0]):
+        #             print("REACHED DESIRED ANGLE OF " + str(DESIRED_ANGLE[0]) + " DEGREES AFTER " + str(i*self.dt) + " SECONDS!")
+        #             self.finishedTime = i*self.dt
 
         elif self.mag_sat.state == "detumble":
             # threshold 0.5-1 degress per second per axis
             thresholdLow = 0
-            if RUNNING_1D and DETUMBLE_1D:
-                thresholdHigh = DETUMBLE_THRESHOLD_1D
-            else:
-                thresholdHigh = DETUMBLE_THRESHOLD
+            thresholdHigh = DETUMBLE_THRESHOLD
 
             angularX = abs(self.states[i - 1][4])
             angularY = abs(self.states[i - 1][5])
@@ -531,13 +529,6 @@ class Simulator():
             self.errorQuats[i] = self.errorQuats[i - 1]
             self.nadirError[i] = self.nadirError[i - 1]
 
-        elif RUNNING_1D and not DETUMBLE_1D:
-
-            # for 1D test, use simple custom controller
-            self.mag_voltages[i] = maxPowerController(DESIRED_MAGNETIC_MOMENTS, self.mag_sat)
-            self.mag_voltages[i] = np.clip(self.mag_voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
-            self.mode[i] = PROTOCOL_MAP['detumble']
-
         elif self.mag_sat.state == "detumble":
 
             # if running b-dot instead of b-cross, don't run until we have proper data
@@ -589,7 +580,19 @@ class Simulator():
 
             # Run PD controller to generate output for reaction wheels based on target orientation
             self.pwms[i] = self.controller.pid_controller(quaternion, TARGET, omega, self.pwms[i-1])
+
+            # TODO: make this its own mode
+            # angular_velocity = self.data[i][3:]
+            # TARGET_SPEED = np.array([math.radians(10), 0, 0])
+            # self.pwms[i] = self.controller.pd_velocity_controller(TARGET_SPEED, angular_velocity)
+
             self.mode[i] = PROTOCOL_MAP['target_point']
+
+            # if RUNNING_1D:
+                # # for 1D test, use simple custom controller
+                # self.mag_voltages[i] = maxPowerController(DESIRED_MAGNETIC_MOMENTS, self.mag_sat)
+                # self.mag_voltages[i] = np.clip(self.mag_voltages[i], -MAX_VOLTAGE_MAG, MAX_VOLTAGE_MAG)
+                # self.mode[i] = PROTOCOL_MAP['detumble']
 
         elif self.mag_sat.state == "idle":
             self.mode[i] = PROTOCOL_MAP['idle']
@@ -793,6 +796,8 @@ class Simulator():
         plotAngles(np.array([quaternion_to_euler(delta_q(a[:4], QUAT_INITIAL)) for a in self.states]), "Euler angles", fileName="Euler.png")
         # plotAngles(np.array([quaternion_to_euler(*a[:4]) for a in self.filtered_states]), "Euler angles", fileName="Euler.png")
 
+        plot_xyz(self.torques, "Actuator Torques", fileName="Torques.png", ylabel="Torque (N*m)")
+
         plotState_xyz(self.filtered_states, True)
 
 
@@ -818,7 +823,6 @@ class Simulator():
         '''
         plot_xyz(self.mag_voltages, "Mag Voltages", fileName="MagVoltages.png", ylabel="Voltage (Volts)")
         plot_xyz(self.mag_currents, "Mag Currents", fileName="MagCurrents.png", ylabel="Current (Amps)")
-        plot_xyz(self.torques, "Mag Torques", fileName="MagTorques.png", ylabel="Torque (N*m)")
         plot_xyz(self.power_output, "Power Usage", fileName="Power_Output.png", ylabel="Power (Watts)")
         # plot_multiple_lines([self.totalPower],["Total Power"], "Total Power Output",fileName="Total_Power_Output.png",ylabel="Power (Watts)")
 

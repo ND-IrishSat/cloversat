@@ -22,9 +22,9 @@ class GUI(tk.Tk):
         ############axes 
         axes_label = tk.Label(self, text="Select which axes you'd like to visualize:")
         axes_label.pack(pady=5)
-        axes_options = ["x", "y", "z"]
+        axes_options = ["z"]
         self.axes_var = tk.StringVar(self)  
-        self.axes_var.set(axes_options[0])  # Default selection (x)
+        self.axes_var.set(axes_options[0])  # Default selection (z)
 
         axes_menu = tk.OptionMenu(self, self.axes_var, *axes_options)
         axes_menu.pack(pady=5)

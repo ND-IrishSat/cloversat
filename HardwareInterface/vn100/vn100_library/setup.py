@@ -8,12 +8,19 @@ additional_libs = None
 if os.name == 'nt':
     additional_libs = [ 'Advapi32' ]
 
+# On Linux, use system-defined baud constants (e.g. B115200) instead of
+# custom baud divisor logic that can fail on USB serial adapters.
+define_macros = []
+if os.name != 'nt':
+    define_macros.append(('VN_DISABLE_CUSTOM_BAUDRATES', '1'))
+
 
 module_raw = Extension(
     'vnpy._libvncxx',
     include_dirs = [ 'libvncxx/include', 'libvncxx/libvnc/include' ],
     swig_opts = [ '-c++' ],
     libraries = additional_libs,
+    define_macros = define_macros,
     sources = [
         'vnpy/libvncxx_wrap.cpp',
         'libvncxx/src/attitude.cpp',

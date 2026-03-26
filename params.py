@@ -66,7 +66,7 @@ EARTH_MAGNETIC_FIELD_LEO = 30e-6  # Average magnetic flux density in LEO [T]
 
 # total time to run sim (unrounded hours)
 # HOURS = ORBITAL_PERIOD / 3600
-HOURS = 0.06
+HOURS = 0.1
 print("simulation time: ", round(HOURS, 6), "hours")
 # total time to run sim (seconds)
 TF = int(HOURS * 3600)
@@ -83,21 +83,22 @@ if not DEGREES:
 RW_AXES = np.array([1, 1, 1, 0])
 MAG_AXES = np.array([0, 0, 0])
 # bitmask for which axes we can rotate about
-FREEDOM_OF_MOVEMENT_AXES = np.array([1, 1, 1])
+FREEDOM_OF_MOVEMENT_AXES = np.array([0, 0, 0])
 
 STATE_SPACE_DIMENSION = 7
 MEASUREMENT_SPACE_DIMENSION = 6
 
 # whether to generate new pySOL data or not
-GENERATE_NEW = True
+GENERATE_NEW = False
 # csv to get pre-generated pysol b field from
-B_FIELD_CSV_FILE = "leo_oe_10.csv"
+# B_FIELD_CSV_FILE = "leo_oe_10.csv"
 # B_FIELD_CSV_FILE = "1_and_half_orbit.csv" # .05 timestep
 # B_FIELD_CSV_FILE = "1_and_half_orbit_quarter.csv" # .025 timestep
 # B_FIELD_CSV_FILE = "1_orbit.csv" # .1 timestep
+B_FIELD_CSV_FILE = "1d_1orbit_tenth_s_gps.csv" # .1 timestep, aligns with 1D PySOL generation
 
 # if false, use PySOL to calculate orbital magnetic field
-CONSTANT_B_FIELD = True
+CONSTANT_B_FIELD = False
 SENSOR_NOISE = True
 STANDSTILL = False # keep satellite in same position around the earth
 
@@ -182,6 +183,8 @@ RW_CONFIG_INERTIA = np.array([[Iw1, 0, 0, 0],
                               [0, 0, Iw3, 0],
                               [0, 0, 0, Iw4]])
 
+RW_CONFIG_INERTIA *= RW_AXES
+
 # Principal moment of inertia for reaction wheels about spin axis and about axis transverse to spin axis, respectively
 RW_SPIN_AXIS_INERTIA = 5.1e-7 # 1e-7 also mentioned
 # TODO: what does this represent??
@@ -200,7 +203,8 @@ TRANSFORMATION = np.array([[1, 0, 0, 1/np.sqrt(3)],
 # =======  CONTROLS  =======================================
 
 # target orientation for if we're simulating controls
-TARGET = np.array([1.0, 0.0, 1.0, 0.0])
+TARGET = np.array([0.707, 0.0, 0.707, 0.0])
+#TARGET = np.array([0.0, 0.0, 1.0, 0.0])
 
 # Quaternion error tolerances define how close we need to be to our target orientation
 QUAT_ERROR_TOLERANCE = 0.01  # Maximum acceptable quaternion error magnitude
@@ -256,7 +260,8 @@ if not DEGREES:
 # =======  REACTION WHEELS  ================================================
 
 # Pulse Width Modulation (PWM) signal that generates the max speed in our motors
-MAX_PWM = 65535
+# MAX_PWM = 65535
+MAX_PWM = 255
 # (TODO) max torque that our wheels can handle (Nm)
 MAX_RW_TORQUE = 0.02
 
@@ -346,35 +351,49 @@ FERRO_MAX_MAGNETIC_MOMENT = FERRO_NUM_TURNS * FERRO_AREA * MAX_CURRENT_MAG * FER
 # =======  SIMPLE 1D TEST  =================================================
 
 if (RUNNING_1D):
+    GUI_ON = False
 
-    # bitmask that represents which axis our torquer is mounted upon
-    MAG_AXES = np.array([1,1,1])
+    # Coupling term? Based off inertia
+
     # bitmask for orientation of table: only movement along z axis should be allowed
-    FREEDOM_OF_MOVEMENT_AXES = np.array([0,0,1])
-    # if true, replace proper torquer with aircore
-    TEST_AIRCORE = False
+    FREEDOM_OF_MOVEMENT_AXES = np.array([0,1,0])
+    RW_AXES = np.array([FREEDOM_OF_MOVEMENT_AXES[0], FREEDOM_OF_MOVEMENT_AXES[1], FREEDOM_OF_MOVEMENT_AXES[2], 0])
 
-    # TODO: find inertia of bowling ball testbed
-    # CUBESAT_BODY_INERTIA = ???
-    # CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
+    '''
+    #inertia of bowling ball testbed in ?? (the np array is in kg m^2)
+    TESTBED_INERTIA = (0.00029263965) * np.array([[-0.41, 0.00, 0.91,
+                                                   0.91, 0.00, 0.41,
+                                                  0.00, 1.00, 0.00]])
+
+    CUBESAT_BODY_INERTIA = TESTBED_INERTIA
+    CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
+    '''
+
+    # This inertia is so even the coupling term seems not to have a real effect
+    # In other words, no need to take it out for 1d simulation
+    # Values from solidworks are from in grams * square millimeters,
+    # 1e-9 transforms them into kg * m^2 which is what the sim uses
+    TESTBED_INERTIA = (1e-9) * np.array([[7502892.64, 7466.02, -35503.74],
+                                          [7466.02, 10102694.40, 19858.13],
+                                          [-35503.74, 19858.13, 7508309.50]])
+
+    CUBESAT_BODY_INERTIA = TESTBED_INERTIA
+    CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
 
     VELOCITY_INITIAL = np.array([0.0, 0.0, 0.0])*FREEDOM_OF_MOVEMENT_AXES
+    # DESIRED_ANGLE = np.array([-90, 0, 0]) # desired angle for x axis
+
+    # if true, replace proper torquer with aircore
+    TEST_AIRCORE = False
     # what magnetic moment to create along each axis (should only be 1 axis)
     if TEST_AIRCORE:
         #using maxing to return an array
         DESIRED_MAGNETIC_MOMENTS = AIR_MAX_MAGNETIC_MOMENT*MAG_AXES
     else:
         DESIRED_MAGNETIC_MOMENTS = FERRO_MAX_MAGNETIC_MOMENT*MAG_AXES
-    DESIRED_ANGLE = np.array([-90, 0, 0]) # desired angle for x axis
 
-    # ==========  1D DETUMBLE/GUI  =====================================
-    DETUMBLE_1D = True
-    GUI_ON = True
+    # ==========  1D GUI  =====================================
 
-    if DETUMBLE_1D and not GUI_ON:
-        VELOCITY_INITIAL = np.array([0.0, 0.0, 20.0])
-        HOURS = 25 / 60 # simulation time in hours
-    DETUMBLE_THRESHOLD_1D = 0.2
     # 3e-3 for fast detubmle (< 100 seconds)
     K = 1.25e-4
 
@@ -385,15 +404,15 @@ if (RUNNING_1D):
         gui.velocity = float(gui.velocity)
         if (gui.axes == "x"):
             MAG_AXES = np.array([1,0,0])
-       # VELOCITY_INITIAL = np.array([gui.velocity, 0.0, 0.0])*FREEDOM_OF_MOVEMENT_AXES
+            VELOCITY_INITIAL = np.array([gui.velocity, 0.0, 0.0])
 
         elif (gui.axes == "y"):
             MAG_AXES = np.array([0,1,0])
-        #VELOCITY_INITIAL = np.array([0.0, gui.velocity, 0.0])
+            VELOCITY_INITIAL = np.array([0.0, gui.velocity, 0.0])
 
         else:
             MAG_AXES = np.array([0,0,1])
-        VELOCITY_INITIAL = np.multiply(np.array([0.0, 0.0, gui.velocity]),FREEDOM_OF_MOVEMENT_AXES)
+            VELOCITY_INITIAL = np.array([0.0, 0.0, gui.velocity])
         gui.time = float(gui.time)
         HOURS = gui.time / 3600 # simulation time in hours
         print(gui.time,gui.velocity,gui.axes)
@@ -408,12 +427,10 @@ if (RUNNING_1D):
     if GUI_ON:
         # show 3D animation if doing gui (probably showcasing)
         RESULT = 2
-    ACCURATE_MAG_READINGS = False
 
     # convert to rad/s
     if not DEGREES:
         VELOCITY_INITIAL *= math.pi / 180
-        DETUMBLE_THRESHOLD_1D *= math.pi / 180
 
 # ================  3D OPTIONS  ======================================================
 
