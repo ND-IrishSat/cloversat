@@ -272,6 +272,9 @@ def main():
 
             previous_quat = None
             previous_wheel_cmd = None
+            
+            # first_quat = vn.read_quat()
+            # our_target = quaternion_multiply(first_quat, TARGET) # 90 degree rotation around x-axis
 
             for i in range(SAMPLE_COUNT):
                 quat = vn.read_quat()
@@ -306,6 +309,8 @@ def main():
                         controller = pid_controller.PIDController(kp, ki, kd, dt)
                         omega = np.array(vn.read_gyro())
                         wheel_cmd = controller.pid_controller(np.array(quat), normalize(TARGET), omega, [])
+                        # wheel_cmd = controller.pid_controller(np.array(quat), normalize(our_target), omega, [])
+                        
                         wheel_cmd = wheel_cmd[2] # only command x-axis wheel for now
 
                     else:
