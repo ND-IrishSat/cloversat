@@ -33,5 +33,5 @@ with open(input_file, "r") as f_in, open(output_file, "w") as f_out:
             *gyro_f
         ]))
 
-        print(out)            # 👈 THIS is your output in terminal
-        f_out.write(out + "\n")  # 👈 saved to file
+        print(out)            
+        f_out.write(out + "\n")  
