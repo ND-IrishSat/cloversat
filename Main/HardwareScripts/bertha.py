@@ -26,6 +26,7 @@ import Simulator.visualizer as simulator
 import Controllers.PID_controller as pid_controller
 from Simulator.EOMs import *
 from params import *
+from ukf.UKF_algorithm import UKF
 
 TARGET_GPS_INTERVAL = 1.0
 DEFAULT_CSV_TIMESTEP = 0.1
@@ -158,7 +159,6 @@ def preflight_vn100_port_access(port):
 
     return True, "serial preflight passed"
 
-
 def main():
     log_status("Starting BERTHA hardware script")
     start = time.time()
@@ -273,8 +273,40 @@ def main():
             previous_quat = None
             previous_wheel_cmd = None
             
-            # first_quat = vn.read_quat()
-            # our_target = quaternion_multiply(first_quat, TARGET) # 90 degree rotation around x-axis
+            first_quat = vn.read_quat()
+            our_target = quaternion_multiply(first_quat, TARGET) # 90 degree rotation around x-axis
+            state = np.array([1,0,0,0,0,0,0]) #[q0, q1, q2, q3, omega_x, omega_y, omega_z]
+            cov = np.identity(7) * 5e-10
+            
+            noise_mag = 5
+            noise_gyro = 0.1
+
+            # r = np.diag([noise_mag] * dim_mes)
+            r = np.array([[noise_mag, 0, 0, 0, 0, 0],
+                        [0, noise_mag, 0, 0, 0, 0],
+                        [0, 0, noise_mag, 0, 0, 0],
+                        [0, 0, 0, noise_gyro, 0, 0],
+                        [0, 0, 0, 0, noise_gyro, 0],
+                        [0, 0, 0, 0, 0, noise_gyro]])
+
+            # q: process noise (n x n)
+            # Should depend on dt
+            # try negative noises?
+            noise_mag = .05
+            # q = np.diag([noise_mag] * dim)
+            q = np.array([[dt, 3*dt/4, dt/2, dt/4, 0, 0, 0],
+                        [3*dt/4, dt, 3*dt/4, dt/2, 0, 0, 0],
+                        [dt/2, 3*dt/4, dt, 3*dt/4, 0, 0, 0],
+                        [dt/4, dt/2, 3*dt/4, dt, 0, 0, 0],
+                        [0, 0, 0, 0, dt, 2*dt/3, dt/3],
+                        [0, 0, 0, 0, 2*dt/3, dt, 2*dt/3],
+                        [0, 0, 0, 0, dt/3, 2*dt/3, dt]
+            ])
+            q = q * noise_mag
+            
+            reaction_speeds = [0, 0, 0]
+            wheel_rpm = 0
+            
 
             for i in range(SAMPLE_COUNT):
                 quat = vn.read_quat()
@@ -287,7 +319,7 @@ def main():
                 wheel_cmd = 0
                 wheel_rpm = None
                 if wheel is not None:
-                    command_law = "point" # "point", "spin", "constant"
+                    command_law = "point" # "point", "spin", "constant", "ukf-point"
                     if command_law == "constant":
                         wheel_cmd = 40 # hardcode for now
 
@@ -308,11 +340,31 @@ def main():
                         ki = 1e-4
                         controller = pid_controller.PIDController(kp, ki, kd, dt)
                         omega = np.array(vn.read_gyro())
+                        
                         wheel_cmd = controller.pid_controller(np.array(quat), normalize(TARGET), omega, [])
                         # wheel_cmd = controller.pid_controller(np.array(quat), normalize(our_target), omega, [])
                         
                         wheel_cmd = wheel_cmd[2] # only command x-axis wheel for now
 
+                    elif command_law == "ukf-point":
+                        dt = 0.05
+                        kp = 3e-2
+                        kd = 5e-3
+                        ki = 1e-4
+                        controller = pid_controller.PIDController(kp, ki, kd, dt)
+                        old_reaction_speeds = reaction_speeds
+                        reaction_speeds = [wheel_rpm, 0 ,0]
+                        data = [
+                            *vn.read_mag(),
+                            *vn.read_gyro()
+                        ]
+                        state, cov = UKF(state, cov, q, r, gps_row[:3], reaction_speeds, old_reaction_speeds, data)
+                        wheel_cmd = controller.pid_controller(np.array(state[:4]), normalize(our_target), np.array(state[4:7]), [])
+                        wheel_cmd = wheel_cmd[2] # only command x-axis wheel for now
+                        
+
+                        
+                    
                     else:
                         wheel_cmd = 0
 
