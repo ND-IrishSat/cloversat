@@ -14,6 +14,8 @@ import re
 import signal
 import sys
 import time
+import argparse
+from ukf.low_pass_filter.lowpassfilter import LowPassFilter
 
 # Add repo root so project modules can be imported from this script location.
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -159,7 +161,28 @@ def preflight_vn100_port_access(port):
     return True, "serial preflight passed"
 
 
+def argparse_setup():
+    parser =  argparse.ArgumentParser()
+    parser.add_argument(
+        "--control-law",
+        choices = ["point", "spin", "constant"],
+        default = "point",
+    )
+
+    parser.add_argument(
+        "--visualize",
+        choices=["on", "off"],
+        default="on",
+    )
+    parser.add_argument(
+        "--filter", 
+        choices = ["LPF", "Kalman", "None"],
+        default = "LPF",
+    )
+    return parser.parse_args()
+
 def main():
+    argument = argparse_setup()
     log_status("Starting BERTHA hardware script")
     start = time.time()
     gps_data = load_gps_data()
@@ -276,6 +299,9 @@ def main():
             # first_quat = vn.read_quat()
             # our_target = quaternion_multiply(first_quat, TARGET) # 90 degree rotation around x-axis
 
+            dt = 0.05 #for the Low pass filter 
+            tau = 0.5
+            mag_filter = LowPassFilter(dt, tau)
             for i in range(SAMPLE_COUNT):
                 quat = vn.read_quat()
                 elapsed = time.time() - start
@@ -284,10 +310,17 @@ def main():
                 sample_idx = max(0, min(sample_idx, len(gps_data) - 1))
                 gps_row = gps_data[sample_idx][1:] if gps_data else ["", "", "", "", "", ""]
 
+                #applying the filter to the magnetometer data
+                if argument.filter == "LPF":
+
+                    mag = np.array(gps_row[0:3])
+                    mag_filtered = mag_filter.apply(mag)
+                    gps_row = [*mag_filtered, *gps_row[3:6]]
+
                 wheel_cmd = 0
                 wheel_rpm = None
                 if wheel is not None:
-                    command_law = "point" # "point", "spin", "constant"
+                    command_law = argument.control_law # "point", "spin", "constant"
                     if command_law == "constant":
                         wheel_cmd = 40 # hardcode for now
 
@@ -330,17 +363,18 @@ def main():
                         f"step {i + 1}/{SAMPLE_COUNT} elapsed={elapsed:.2f}s wheel_cmd={wheel_cmd} rpm={rpm_text} quat_delta={quat_delta:.6f}"
                     )
 
-                simulator.game_visualize(np.array([quat]), i)
+                if argument.visualize == "on":
+                    simulator.game_visualize(np.array([quat]), i)
                 writer.writerow(
-                    [
-                        elapsed,
-                        quat[0],
-                        quat[1],
-                        quat[2],
-                        quat[3],
-                        wheel_cmd,
-                        "" if wheel_rpm is None else wheel_rpm,
-                    ]
+                [
+                    elapsed,
+                    quat[0],
+                    quat[1],
+                    quat[2],
+                    quat[3],
+                    wheel_cmd,
+                    "" if wheel_rpm is None else wheel_rpm,
+                ]
                     + gps_row
                 )
 
