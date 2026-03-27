@@ -261,9 +261,15 @@ def main():
                     "q_z",
                     "wheel_cmd",
                     "wheel_rpm",
-                    "gps_bx",
-                    "gps_by",
-                    "gps_bz",
+                    "mag_x",
+                    "mag_y",
+                    "mag_z",
+                    "gyro_x",
+                    "gyro_y",
+                    "gyro_z",
+                    "earth_mag_x",
+                    "earth_mag_y",
+                    "earth_mag_z",
                     "gps_x",
                     "gps_y",
                     "gps_z",
@@ -272,12 +278,16 @@ def main():
 
             previous_quat = None
             previous_wheel_cmd = None
-            
+
             # first_quat = vn.read_quat()
-            # our_target = quaternion_multiply(first_quat, TARGET) # 90 degree rotation around x-axis
+            # updated_target = quaternion_multiply(first_quat, TARGET) # 90 degree rotation around x-axis
 
             for i in range(SAMPLE_COUNT):
-                quat = vn.read_quat()
+                quat = np.array(vn.read_quat())
+                # Rad/s (seemingly)
+                angular_velocity = np.array(vn.read_gyro())
+                # Magnetic field in body frame
+                b_body = np.array(vn.read_mag())
                 elapsed = time.time() - start
 
                 sample_idx = int(elapsed // TARGET_GPS_INTERVAL)
@@ -294,12 +304,11 @@ def main():
                     elif command_law == "spin":
                         kp = 2e-1
                         kd = 0.5e-1
-                        print("Speed: ", math.degrees(np.array(vn.read_gyro())[2]))
+                        print("Speed: ", math.degrees(angular_velocity[2]))
                         pid = pid_controller.PIDController(kp, 0, kd, 0)
                         target_speed = np.array([0.0, 0.0, -math.radians(10.0)]) # degrees/s
-                        wheel_cmd = pid.pd_velocity_controller(target_speed=target_speed, current_speed=np.array(vn.read_gyro()), kp=kp, kd=kd)
-                        #print(wheel_cmd)
-                        wheel_cmd = wheel_cmd[2] # only command x-axis wheel for now
+                        wheel_cmd = pid.pd_velocity_controller(target_speed=target_speed, current_speed=angular_velocity, kp=kp, kd=kd)
+                        wheel_cmd = wheel_cmd[2]
 
                     elif command_law == "point":
                         dt = 0.05
@@ -307,11 +316,10 @@ def main():
                         kd = 5e-3
                         ki = 1e-4
                         controller = pid_controller.PIDController(kp, ki, kd, dt)
-                        omega = np.array(vn.read_gyro())
-                        wheel_cmd = controller.pid_controller(np.array(quat), normalize(TARGET), omega, [])
-                        # wheel_cmd = controller.pid_controller(np.array(quat), normalize(our_target), omega, [])
-                        
-                        wheel_cmd = wheel_cmd[2] # only command x-axis wheel for now
+                        wheel_cmd = controller.pid_controller(quat, normalize(TARGET), angular_velocity, [])
+                        # wheel_cmd = controller.pid_controller(quat, normalize(updated_target), angular_velocity, [])
+
+                        wheel_cmd = wheel_cmd[2]
 
                     else:
                         wheel_cmd = 0
@@ -341,6 +349,8 @@ def main():
                         wheel_cmd,
                         "" if wheel_rpm is None else wheel_rpm,
                     ]
+                    + b_body.tolist()
+                    + angular_velocity.tolist()
                     + gps_row
                 )
 
