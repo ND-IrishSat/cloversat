@@ -353,6 +353,7 @@ def main():
                         wheel_cmd = wheel_cmd[2]
 
                     elif command_law == "ukf-point":
+                        # TODO: add an option for filtering data (none, lowpass, or kalman) no matter which control law we use
                         dt = 0.05
                         kp = 3e-2
                         kd = 5e-3
