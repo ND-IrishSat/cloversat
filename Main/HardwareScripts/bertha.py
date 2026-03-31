@@ -28,6 +28,7 @@ import Simulator.visualizer as simulator
 import Controllers.PID_controller as pid_controller
 from Simulator.EOMs import *
 from params import *
+from ukf.UKF_algorithm import UKF
 
 TARGET_GPS_INTERVAL = 1.0
 DEFAULT_CSV_TIMESTEP = 0.1
@@ -284,9 +285,15 @@ def main():
                     "q_z",
                     "wheel_cmd",
                     "wheel_rpm",
-                    "gps_bx",
-                    "gps_by",
-                    "gps_bz",
+                    "mag_x",
+                    "mag_y",
+                    "mag_z",
+                    "gyro_x",
+                    "gyro_y",
+                    "gyro_z",
+                    "earth_mag_x",
+                    "earth_mag_y",
+                    "earth_mag_z",
                     "gps_x",
                     "gps_y",
                     "gps_z",
@@ -295,15 +302,50 @@ def main():
 
             previous_quat = None
             previous_wheel_cmd = None
-            
-            # first_quat = vn.read_quat()
-            # our_target = quaternion_multiply(first_quat, TARGET) # 90 degree rotation around x-axis
+
+            first_quat = vn.read_quat()
+            our_target = quaternion_multiply(first_quat, TARGET) # 90 degree rotation around x-axis
+            state = np.array([1,0,0,0,0,0,0]) #[q0, q1, q2, q3, omega_x, omega_y, omega_z]
+            cov = np.identity(7) * 5e-10
+
+            noise_mag = 5
+            noise_gyro = 0.1
+
+            # r = np.diag([noise_mag] * dim_mes)
+            r = np.array([[noise_mag, 0, 0, 0, 0, 0],
+                        [0, noise_mag, 0, 0, 0, 0],
+                        [0, 0, noise_mag, 0, 0, 0],
+                        [0, 0, 0, noise_gyro, 0, 0],
+                        [0, 0, 0, 0, noise_gyro, 0],
+                        [0, 0, 0, 0, 0, noise_gyro]])
+
+            # q: process noise (n x n)
+            # Should depend on dt
+            # try negative noises?
+            noise_mag = .05
+            # q = np.diag([noise_mag] * dim)
+            q = np.array([[dt, 3*dt/4, dt/2, dt/4, 0, 0, 0],
+                        [3*dt/4, dt, 3*dt/4, dt/2, 0, 0, 0],
+                        [dt/2, 3*dt/4, dt, 3*dt/4, 0, 0, 0],
+                        [dt/4, dt/2, 3*dt/4, dt, 0, 0, 0],
+                        [0, 0, 0, 0, dt, 2*dt/3, dt/3],
+                        [0, 0, 0, 0, 2*dt/3, dt, 2*dt/3],
+                        [0, 0, 0, 0, dt/3, 2*dt/3, dt]
+            ])
+            q = q * noise_mag
+
+            reaction_speeds = [0, 0, 0]
+            wheel_rpm = 0
 
             dt = 0.05 #for the Low pass filter 
             tau = 0.5
             mag_filter = LowPassFilter(dt, tau)
             for i in range(SAMPLE_COUNT):
-                quat = vn.read_quat()
+                quat = np.array(vn.read_quat())
+                # Rad/s (seemingly)
+                angular_velocity = np.array(vn.read_gyro())
+                # Magnetic field in body frame
+                b_body = np.array(vn.read_mag())
                 elapsed = time.time() - start
 
                 sample_idx = int(elapsed // TARGET_GPS_INTERVAL)
@@ -327,12 +369,11 @@ def main():
                     elif command_law == "spin":
                         kp = 2e-1
                         kd = 0.5e-1
-                        print("Speed: ", math.degrees(np.array(vn.read_gyro())[2]))
+                        print("Speed: ", math.degrees(angular_velocity[2]))
                         pid = pid_controller.PIDController(kp, 0, kd, 0)
                         target_speed = np.array([0.0, 0.0, -math.radians(10.0)]) # degrees/s
-                        wheel_cmd = pid.pd_velocity_controller(target_speed=target_speed, current_speed=np.array(vn.read_gyro()), kp=kp, kd=kd)
-                        #print(wheel_cmd)
-                        wheel_cmd = wheel_cmd[2] # only command x-axis wheel for now
+                        wheel_cmd = pid.pd_velocity_controller(target_speed=target_speed, current_speed=angular_velocity, kp=kp, kd=kd)
+                        wheel_cmd = wheel_cmd[2]
 
                     elif command_law == "point":
                         dt = 0.05
@@ -340,12 +381,27 @@ def main():
                         kd = 5e-3
                         ki = 1e-4
                         controller = pid_controller.PIDController(kp, ki, kd, dt)
-                        omega = np.array(vn.read_gyro())
-                        wheel_cmd = controller.pid_controller(np.array(quat), normalize(TARGET), omega, [])
-                        # wheel_cmd = controller.pid_controller(np.array(quat), normalize(our_target), omega, [])
-                        
-                        wheel_cmd = wheel_cmd[2] # only command x-axis wheel for now
+                        wheel_cmd = controller.pid_controller(quat, normalize(TARGET), angular_velocity, [])
+                        # wheel_cmd = controller.pid_controller(quat, normalize(updated_target), angular_velocity, [])
 
+                        wheel_cmd = wheel_cmd[2]
+
+                    elif command_law == "ukf-point":
+                        # TODO: add an option for filtering data (none, lowpass, or kalman) no matter which control law we use
+                        dt = 0.05
+                        kp = 3e-2
+                        kd = 5e-3
+                        ki = 1e-4
+                        controller = pid_controller.PIDController(kp, ki, kd, dt)
+                        old_reaction_speeds = reaction_speeds
+                        reaction_speeds = [wheel_rpm, 0 ,0]
+                        data = [
+                            *b_body.tolist(),
+                            *angular_velocity.tolist(),
+                        ]
+                        state, cov = UKF(state, cov, q, r, gps_row[:3], reaction_speeds, old_reaction_speeds, data)
+                        wheel_cmd = controller.pid_controller(np.array(state[:4]), normalize(our_target), np.array(state[4:7]), [])
+                        wheel_cmd = wheel_cmd[2]
                     else:
                         wheel_cmd = 0
 
@@ -366,15 +422,17 @@ def main():
                 if argument.visualize == "on":
                     simulator.game_visualize(np.array([quat]), i)
                 writer.writerow(
-                [
-                    elapsed,
-                    quat[0],
-                    quat[1],
-                    quat[2],
-                    quat[3],
-                    wheel_cmd,
-                    "" if wheel_rpm is None else wheel_rpm,
-                ]
+                    [
+                        elapsed,
+                        quat[0],
+                        quat[1],
+                        quat[2],
+                        quat[3],
+                        wheel_cmd,
+                        "" if wheel_rpm is None else wheel_rpm,
+                    ]
+                    + b_body.tolist()
+                    + angular_velocity.tolist()
                     + gps_row
                 )
 

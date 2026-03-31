@@ -16,10 +16,6 @@ import time
 import pigpio
 import signal
 import sys
-# from USB_serial import USBSerialManager
-
-# Set this flag to True to use the Arduino for PWM control
-USING_ARDUINO = False
 
 DAA = 17
 COMU = 24
@@ -53,10 +49,6 @@ class ReactionWheel:
         self.callback = None
         self.rpm = 0.0 #revolutions per minute
 
-        self.serial_manager = None
-        if USING_ARDUINO:
-            self.serial_manager = USBSerialManager()
-
         self._setup_()
 
     def _setup_(self):
@@ -81,20 +73,8 @@ class ReactionWheel:
         # comu should be hanging (disconnected)
         self.pi.write(self.comu, 1)
 
-        if USING_ARDUINO:
-            # devices = self.serial_manager.list_usb_devices()
-            #if not devices:
-            #    raise RuntimeError("No USB devices found for Arduino connection.")
-            # Connect to the first device, assuming it's the Arduino
-            # device_path = devices[0]['device']
-            device_path = "/dev/ttyACM0"
-            if not self.serial_manager.connect_device(device_path, 115200, 'motor_controller'):
-                raise RuntimeError(f"Failed to connect to Arduino at {device_path}")
-            print("Arduino connected for PWM control.")
-            time.sleep(2) # Wait for Arduino to initialize
-        else:
-            # Initialize hardware PWM OFF
-            self.pi.hardware_PWM(self.pwm, 20000, 0)
+        # Initialize hardware PWM OFF
+        self.pi.hardware_PWM(self.pwm, 20000, 0)
 
         time.sleep(0.3)
 
@@ -128,12 +108,7 @@ class ReactionWheel:
         self.pi.write(self.br, 0)
         pwm_to_set = max(0, min(MAX_PWM, int(abs(pwm_input))))
 
-        if USING_ARDUINO:
-            self.serial_manager.send_pwm_byte('motor_controller', pwm_to_set)
-            #time.sleep(.5)
-            #response = self.serial_manager
-        else:
-            self.pi.hardware_PWM(self.pwm, 20000, int(pwm_to_set/MAX_PWM*1_000_000)) # this converts pwm (0-255) to duty cycle (0-1_000_000)
+        self.pi.hardware_PWM(self.pwm, 20000, int(pwm_to_set/MAX_PWM*1_000_000)) # this converts pwm (0-255) to duty cycle (0-1_000_000)
 
 
     def slow_down(self, target_rpm=0.0, max_time=4.0):
@@ -169,12 +144,7 @@ class ReactionWheel:
         if self.callback:
             self.callback.cancel()
 
-        if USING_ARDUINO and self.serial_manager:
-            print("Killing motor (Arduino)...")
-            self.serial_manager.send_pwm_byte('motor_controller', 0)
-            self.serial_manager.close_all()
-        else:
-            self.pi.hardware_PWM(self.pwm, 20000, 0)
+        self.pi.hardware_PWM(self.pwm, 20000, 0)
 
         # Set break to stop quickly
         self.pi.write(self.br, 1)
@@ -248,7 +218,7 @@ def main():
         wheel.set_speed(i)
         print(f"RPM: {wheel.rpm:.2f}")
         time.sleep(10/60)
-    
+
     time.sleep(10)
 
     wheel.kill()
