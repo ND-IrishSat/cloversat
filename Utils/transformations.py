@@ -247,11 +247,11 @@ def delta_q(q_actual, q_target):
     '''
 
     # because we're using unit quaternions, inverse = conjugate
-    q_actual_inverse = np.array([q_actual[0], -q_actual[1], -q_actual[2], -q_actual[3]])
+    # q_actual_inverse = np.array([q_actual[0], -q_actual[1], -q_actual[2], -q_actual[3]])
     q_target_inverse = np.array([q_target[0], -q_target[1], -q_target[2], -q_target[3]])
 
-    # q_error = quaternion_multiply(q_actual, q_target_inverse)
-    q_error = quaternion_multiply(q_target, q_actual_inverse)
+    q_error = quaternion_multiply(q_actual, q_target_inverse)
+    # q_error = quaternion_multiply(q_target, q_actual_inverse)
 
     # since a quaternion can represent 2 relative orientations, we also want to ensure that the error quaternion is the shortest path
     # from: Quaternion Attitude Control System of Highly Maneuverable Aircraft

@@ -116,7 +116,7 @@ NADIR_INTERVAL = 2.0
 # Whether to run our unscented kalman filter or not
 RUN_UKF = False
 # for simple 1D testbed validation (with a suboption for detumble)
-RUNNING_1D = False
+RUNNING_1D = True
 # whether you're running in Debart with 3D rendering (check 3D settings at bottom if so)
 RUNNING_MAYA = False
 # 0 = only create pdf output, 1 = show 3D animation visualization, 2 = both, 3 = none
