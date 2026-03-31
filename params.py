@@ -373,9 +373,10 @@ if (RUNNING_1D):
     # In other words, no need to take it out for 1d simulation
     # Values from solidworks are from in grams * square millimeters,
     # 1e-9 transforms them into kg * m^2 which is what the sim uses
-    TESTBED_INERTIA = (1e-9) * np.array([[7502892.64, 7466.02, -35503.74],
-                                          [7466.02, 10102694.40, 19858.13],
-                                          [-35503.74, 19858.13, 7508309.50]])
+    # this is the second trial of moments of inertia taken at the center of mass and aligned with the output coordinate system
+    TESTBED_INERTIA = (1e-9) * np.array([[7445117.88, 11485.96, -11309.77],
+                                          [11485.96, 9991675.51, 15649.98],
+                                          [-11309.77, 15649.98, 7452649.13]])
 
     CUBESAT_BODY_INERTIA = TESTBED_INERTIA
     CUBESAT_BODY_INERTIA_INVERSE = np.linalg.inv(CUBESAT_BODY_INERTIA)
