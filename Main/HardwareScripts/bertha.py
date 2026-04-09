@@ -15,7 +15,7 @@ import signal
 import sys
 import time
 import argparse
-from ukf.low_pass_filter.lowpassfilter import LowPassFilter
+# from ukf.low_pass_filter.lowpassfilter import LowPassFilter
 
 # Add repo root so project modules can be imported from this script location.
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,7 +28,7 @@ import Simulator.visualizer as simulator
 import Controllers.PID_controller as pid_controller
 from Simulator.EOMs import *
 from params import *
-from ukf.UKF_algorithm import UKF
+# from ukf.UKF_algorithm import UKF
 
 TARGET_GPS_INTERVAL = 1.0
 DEFAULT_CSV_TIMESTEP = 0.1
@@ -166,19 +166,19 @@ def argparse_setup():
     parser =  argparse.ArgumentParser()
     parser.add_argument(
         "--control-law",
-        choices = ["point", "spin", "constant"],
-        default = "point",
+        choices = ["point", "constant_speed", "constant_pwm", "none"],
+        default = "none",
     )
 
     parser.add_argument(
         "--visualize",
         choices=["on", "off"],
-        default="on",
+        default="off",
     )
     parser.add_argument(
-        "--filter", 
+        "--filter",
         choices = ["LPF", "Kalman", "None"],
-        default = "LPF",
+        default = "None",
     )
     return parser.parse_args()
 
@@ -271,7 +271,38 @@ def main():
         # Register signal handler for graceful Ctrl+C shutdown
         register_signal_handler(wheel, wheel_callback, pi, vn_connected)
 
-        file_path = os.path.join(PROJECT_ROOT, "Main", "HardwareScripts", "bertha_imu_wheel_log.csv")
+        if argument.filter == "Kalman":
+            state = np.array([1,0,0,0,0,0,0]) #[q0, q1, q2, q3, omega_x, omega_y, omega_z]
+            cov = np.identity(7) * 5e-10
+
+            noise_mag = 5
+            noise_gyro = 0.1
+
+            # r = np.diag([noise_mag] * dim_mes)
+            r = np.array([[noise_mag, 0, 0, 0, 0, 0],
+                        [0, noise_mag, 0, 0, 0, 0],
+                        [0, 0, noise_mag, 0, 0, 0],
+                        [0, 0, 0, noise_gyro, 0, 0],
+                        [0, 0, 0, 0, noise_gyro, 0],
+                        [0, 0, 0, 0, 0, noise_gyro]])
+
+            # q: process noise (n x n)
+            # Should depend on dt
+            # try negative noises?
+            noise_mag = .05
+            # q = np.diag([noise_mag] * dim)
+            q = np.array([[dt, 3*dt/4, dt/2, dt/4, 0, 0, 0],
+                        [3*dt/4, dt, 3*dt/4, dt/2, 0, 0, 0],
+                        [dt/2, 3*dt/4, dt, 3*dt/4, 0, 0, 0],
+                        [dt/4, dt/2, 3*dt/4, dt, 0, 0, 0],
+                        [0, 0, 0, 0, dt, 2*dt/3, dt/3],
+                        [0, 0, 0, 0, 2*dt/3, dt, 2*dt/3],
+                        [0, 0, 0, 0, dt/3, 2*dt/3, dt]
+            ])
+            q = q * noise_mag
+
+        # file_path = os.path.join(PROJECT_ROOT, "Main", "HardwareScripts", "results", "bertha_imu_wheel_log.csv")
+        file_path = os.path.join(PROJECT_ROOT, "Main", "HardwareScripts", "results", "blank_spin.csv")
         log_status(f"Writing telemetry log to {file_path}")
 
         with open(file_path, "w", newline="") as log_file:
@@ -304,42 +335,17 @@ def main():
             previous_wheel_cmd = None
 
             first_quat = vn.read_quat()
-            our_target = quaternion_multiply(first_quat, TARGET) # 90 degree rotation around x-axis
-            state = np.array([1,0,0,0,0,0,0]) #[q0, q1, q2, q3, omega_x, omega_y, omega_z]
-            cov = np.identity(7) * 5e-10
-
-            noise_mag = 5
-            noise_gyro = 0.1
-
-            # r = np.diag([noise_mag] * dim_mes)
-            r = np.array([[noise_mag, 0, 0, 0, 0, 0],
-                        [0, noise_mag, 0, 0, 0, 0],
-                        [0, 0, noise_mag, 0, 0, 0],
-                        [0, 0, 0, noise_gyro, 0, 0],
-                        [0, 0, 0, 0, noise_gyro, 0],
-                        [0, 0, 0, 0, 0, noise_gyro]])
-
-            # q: process noise (n x n)
-            # Should depend on dt
-            # try negative noises?
-            noise_mag = .05
-            # q = np.diag([noise_mag] * dim)
-            q = np.array([[dt, 3*dt/4, dt/2, dt/4, 0, 0, 0],
-                        [3*dt/4, dt, 3*dt/4, dt/2, 0, 0, 0],
-                        [dt/2, 3*dt/4, dt, 3*dt/4, 0, 0, 0],
-                        [dt/4, dt/2, 3*dt/4, dt, 0, 0, 0],
-                        [0, 0, 0, 0, dt, 2*dt/3, dt/3],
-                        [0, 0, 0, 0, 2*dt/3, dt, 2*dt/3],
-                        [0, 0, 0, 0, dt/3, 2*dt/3, dt]
-            ])
-            q = q * noise_mag
+            # 90 degree rotation around x-axis based from starting position (quat at time of first sample)
+            target_adjusted = quaternion_multiply(first_quat, TARGET)
 
             reaction_speeds = [0, 0, 0]
             wheel_rpm = 0
 
-            dt = 0.05 #for the Low pass filter 
-            tau = 0.5
-            mag_filter = LowPassFilter(dt, tau)
+            # if argument.filter == "LPF":
+                # dt = 0.05 #for the Low pass filter
+                # tau = 0.5
+                # mag_filter = LowPassFilter(dt, tau)
+
             for i in range(SAMPLE_COUNT):
                 quat = np.array(vn.read_quat())
                 # Rad/s (seemingly)
@@ -353,20 +359,19 @@ def main():
                 gps_row = gps_data[sample_idx][1:] if gps_data else ["", "", "", "", "", ""]
 
                 #applying the filter to the magnetometer data
-                if argument.filter == "LPF":
-
-                    mag = np.array(gps_row[0:3])
-                    mag_filtered = mag_filter.apply(mag)
-                    gps_row = [*mag_filtered, *gps_row[3:6]]
+                # if argument.filter == "LPF":
+                    # mag = np.array(gps_row[0:3])
+                    # mag_filtered = mag_filter.apply(mag)
+                    # gps_row = [*mag_filtered, *gps_row[3:6]]
 
                 wheel_cmd = 0
                 wheel_rpm = None
                 if wheel is not None:
-                    command_law = argument.control_law # "point", "spin", "constant"
-                    if command_law == "constant":
-                        wheel_cmd = 40 # hardcode for now
+                    command_law = argument.control_law # "point", "constant_speed", "constant_pwm"
+                    if command_law == "constant_pwm":
+                        wheel_cmd = 40 # hardcode pwm for now
 
-                    elif command_law == "spin":
+                    elif command_law == "constant_speed":
                         kp = 2e-1
                         kd = 0.5e-1
                         print("Speed: ", math.degrees(angular_velocity[2]))
@@ -381,27 +386,26 @@ def main():
                         kd = 5e-3
                         ki = 1e-4
                         controller = pid_controller.PIDController(kp, ki, kd, dt)
-                        wheel_cmd = controller.pid_controller(quat, normalize(TARGET), angular_velocity, [])
-                        # wheel_cmd = controller.pid_controller(quat, normalize(updated_target), angular_velocity, [])
+                        # Because its 1D, only take z axis
+                        wheel_cmd = controller.pid_controller(quat, normalize(target_adjusted), angular_velocity, [])[2]
 
-                        wheel_cmd = wheel_cmd[2]
+                    # elif command_law == "ukf-point":
+                    #     # TODO: add an option for filtering data (none, lowpass, or kalman) no matter which control law we use
+                    #     dt = 0.05
+                    #     kp = 3e-2
+                    #     kd = 5e-3
+                    #     ki = 1e-4
+                    #     controller = pid_controller.PIDController(kp, ki, kd, dt)
+                    #     old_reaction_speeds = reaction_speeds
+                    #     reaction_speeds = [wheel_rpm, 0 ,0]
+                    #     data = [
+                    #         *b_body.tolist(),
+                    #         *angular_velocity.tolist(),
+                    #     ]
+                    #     state, cov = UKF(state, cov, q, r, gps_row[:3], reaction_speeds, old_reaction_speeds, data)
+                    #     wheel_cmd = controller.pid_controller(np.array(state[:4]), normalize(target_adjusted), np.array(state[4:7]), [])
+                    #     wheel_cmd = wheel_cmd[2]
 
-                    elif command_law == "ukf-point":
-                        # TODO: add an option for filtering data (none, lowpass, or kalman) no matter which control law we use
-                        dt = 0.05
-                        kp = 3e-2
-                        kd = 5e-3
-                        ki = 1e-4
-                        controller = pid_controller.PIDController(kp, ki, kd, dt)
-                        old_reaction_speeds = reaction_speeds
-                        reaction_speeds = [wheel_rpm, 0 ,0]
-                        data = [
-                            *b_body.tolist(),
-                            *angular_velocity.tolist(),
-                        ]
-                        state, cov = UKF(state, cov, q, r, gps_row[:3], reaction_speeds, old_reaction_speeds, data)
-                        wheel_cmd = controller.pid_controller(np.array(state[:4]), normalize(our_target), np.array(state[4:7]), [])
-                        wheel_cmd = wheel_cmd[2]
                     else:
                         wheel_cmd = 0
 
@@ -421,6 +425,7 @@ def main():
 
                 if argument.visualize == "on":
                     simulator.game_visualize(np.array([quat]), i)
+
                 writer.writerow(
                     [
                         elapsed,
@@ -438,7 +443,7 @@ def main():
 
                 previous_quat = quat
                 previous_wheel_cmd = wheel_cmd
-                time.sleep(.05)
+                time.sleep(dt)
 
         log_status(f"Run complete. Saved log to {file_path}")
 
