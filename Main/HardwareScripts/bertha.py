@@ -194,6 +194,33 @@ def main():
     vn_connected = False
 
     try:
+        # Optional reaction wheel setup; loop still runs if unavailable.
+        try:
+            import pigpio
+            import serial
+            from HardwareInterface.reaction_wheels import motors as rw_motors
+
+            pi = pigpio.pi()
+            if not pi.connected:
+                log_status("Reaction wheel disabled: pigpio daemon not running.", level="WARN")
+                pi.stop()
+                pi = None
+            else:
+                wheel = rw_motors.ReactionWheel(
+                    pi,
+                    rw_motors.DAA,
+                    rw_motors.COMU,
+                    rw_motors.FREQ,
+                    rw_motors.PWM,
+                    rw_motors.BR,
+                    rw_motors.DIRE,
+                )
+                wheel_callback = pi.callback(rw_motors.FREQ, pigpio.RISING_EDGE, wheel.get_rpm_callback)
+                log_status("Reaction wheel control active")
+        except Exception as exc:
+            log_status(f"Running without reaction wheel control: {exc}", level="WARN")
+            return
+
         # Detect serial ports when pyserial is available.
         try:
             list_ports = importlib.import_module("serial.tools.list_ports")
@@ -240,33 +267,6 @@ def main():
             raise RuntimeError("VN100 sensor did not verify connectivity")
         vn_connected = True
         log_status(f"VN100 connection established on {vn_port}")
-
-        # Optional reaction wheel setup; loop still runs if unavailable.
-        try:
-            import pigpio
-            import serial
-            from HardwareInterface.reaction_wheels import motors as rw_motors
-
-            pi = pigpio.pi()
-            if not pi.connected:
-                log_status("Reaction wheel disabled: pigpio daemon not running.", level="WARN")
-                pi.stop()
-                pi = None
-            else:
-                wheel = rw_motors.ReactionWheel(
-                    pi,
-                    rw_motors.DAA,
-                    rw_motors.COMU,
-                    rw_motors.FREQ,
-                    rw_motors.PWM,
-                    rw_motors.BR,
-                    rw_motors.DIRE,
-                )
-                wheel_callback = pi.callback(rw_motors.FREQ, pigpio.RISING_EDGE, wheel.get_rpm_callback)
-                log_status("Reaction wheel control active")
-        except Exception as exc:
-            log_status(f"Running without reaction wheel control: {exc}", level="WARN")
-            return
 
         # Register signal handler for graceful Ctrl+C shutdown
         register_signal_handler(wheel, wheel_callback, pi, vn_connected)
