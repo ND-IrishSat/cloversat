@@ -12,17 +12,19 @@ import errno
 import importlib
 import os
 import re
+import select
 import signal
 import sys
 import time
 import argparse
-#from ukf.low_pass_filter.lowpassfilter import LowPassFilter
 
 # Add repo root so project modules can be imported from this script location.
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_ROOT)
 
 import numpy as np
+from ukf.low_pass_filter.lowpassfilter import LowPassFilter
+
 
 import HardwareInterface.vn100.vn100_interface as vn
 import Simulator.visualizer as simulator
@@ -36,6 +38,145 @@ DEFAULT_CSV_TIMESTEP = 0.1
 LOG_EVERY_STEPS = 5
 # How many iterations (54000 for entire GPS csv--basically infinite)
 SAMPLE_COUNT = 54000
+
+ABSOLUTE_KEY_ANGLES = {
+    "w": 0.0,      # Return to first_quat
+    "d": -90.0,    # 90° clockwise from first_quat
+    "a": 90.0,     # 90° CCW from first_quat
+    "s": 180.0,    # 180° from first_quat
+}
+
+RELATIVE_ROTATION_KEYS = {
+    "q": 90.0,     # Rotate 90° CCW from current
+    "e": -90.0,    # Rotate 90° CW from current
+}
+
+
+def euler_deg_to_quaternion(roll_deg, pitch_deg, yaw_deg):
+    """Convert Euler angles (deg) to quaternion (w, x, y, z)."""
+    roll = np.deg2rad(roll_deg)
+    pitch = np.deg2rad(pitch_deg)
+    yaw = np.deg2rad(yaw_deg)
+
+    cy = np.cos(yaw * 0.5)
+    sy = np.sin(yaw * 0.5)
+    cp = np.cos(pitch * 0.5)
+    sp = np.sin(pitch * 0.5)
+    cr = np.cos(roll * 0.5)
+    sr = np.sin(roll * 0.5)
+
+    w = cr * cp * cy + sr * sp * sy
+    x = sr * cp * cy - cr * sp * sy
+    y = cr * sp * cy + sr * cp * sy
+    z = cr * cp * sy - sr * sp * cy
+
+    return np.array([w, x, y, z])
+
+
+def quaternion_to_euler_deg(q):
+    """Convert quaternion (w, x, y, z) to Euler angles in degrees (roll, pitch, yaw)."""
+    w, x, y, z = q
+
+    # Roll (x-axis rotation)
+    sinr_cosp = 2 * (w * x + y * z)
+    cosr_cosp = 1 - 2 * (x * x + y * y)
+    roll = np.arctan2(sinr_cosp, cosr_cosp)
+
+    # Pitch (y-axis rotation)
+    sinp = 2 * (w * y - z * x)
+    if abs(sinp) >= 1:
+        pitch = np.copysign(np.pi / 2, sinp)
+    else:
+        pitch = np.arcsin(sinp)
+
+    # Yaw (z-axis rotation)
+    siny_cosp = 2 * (w * z + x * y)
+    cosy_cosp = 1 - 2 * (y * y + z * z)
+    yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+    return np.rad2deg(roll), np.rad2deg(pitch), np.rad2deg(yaw)
+
+
+def print_rotation_update(label, quat, prev_euler=None):
+    """Print rotation in Euler degrees and show which axis changed if prev_euler is provided."""
+    roll, pitch, yaw = quaternion_to_euler_deg(quat)
+
+    if prev_euler is not None:
+        prev_roll, prev_pitch, prev_yaw = prev_euler
+        roll_delta = abs(roll - prev_roll)
+        pitch_delta = abs(pitch - prev_pitch)
+        yaw_delta = abs(yaw - prev_yaw)
+
+        # Determine which axis changed the most
+        max_delta = max(roll_delta, pitch_delta, yaw_delta)
+        if abs(max_delta - roll_delta) < 1e-6:
+            axis = "ROLL"
+        elif abs(max_delta - pitch_delta) < 1e-6:
+            axis = "PITCH"
+        else:
+            axis = "YAW"
+
+        log_status(f"{label}: roll={roll:.1f}deg, pitch={pitch:.1f}deg, yaw={yaw:.1f}deg [{axis}]")
+    else:
+        log_status(f"{label}: roll={roll:.1f}deg, pitch={pitch:.1f}deg, yaw={yaw:.1f}deg")
+
+
+def setup_nonblocking_keyboard():
+    """Configure stdin for non-blocking single-key reads (POSIX terminals)."""
+    if not os.name == "posix" or not sys.stdin.isatty():
+        return None
+
+    try:
+        import termios
+        import tty
+
+        fd = sys.stdin.fileno()
+        original_state = termios.tcgetattr(fd)
+        tty.setcbreak(fd)
+        return (fd, original_state)
+    except Exception:
+        return None
+
+
+def restore_keyboard(keyboard_state):
+    """Restore terminal state after setup_nonblocking_keyboard."""
+    if keyboard_state is None:
+        return
+
+    try:
+        import termios
+
+        fd, original_state = keyboard_state
+        termios.tcsetattr(fd, termios.TCSADRAIN, original_state)
+    except Exception:
+        pass
+
+
+def read_keypress():
+    """Return (key_type, value, key_name) if a mapped key was pressed, else (None, None, None).
+    key_type: 'absolute' (WASD), 'relative' (QE), or None.
+    value: angle in degrees or None.
+    key_name: readable key name or None.
+    """
+    if not sys.stdin.isatty():
+        return None, None, None
+
+    ready, _, _ = select.select([sys.stdin], [], [], 0)
+    if not ready:
+        return None, None, None
+
+    key = sys.stdin.read(1)
+    if not key:
+        return None, None, None
+
+    lowered = key.lower()
+    if lowered in ABSOLUTE_KEY_ANGLES:
+        return "absolute", ABSOLUTE_KEY_ANGLES[lowered], lowered.upper()
+
+    if lowered in RELATIVE_ROTATION_KEYS:
+        return "relative", RELATIVE_ROTATION_KEYS[lowered], lowered.upper()
+
+    return None, None, None
 
 
 def log_status(message, level="INFO"):
@@ -187,7 +328,14 @@ def argparse_setup():
         help="Filename for telemetry CSV log (default: bertha_results_{timestamp}.csv)",
     )
 
+    parser.add_argument(
+        "--keytest",
+        action="store_true",
+        help="Enable keyboard control of target quaternion setpoint (WASD + arrow keys).",
+    )
     return parser.parse_args()
+
+HARDCODE_CONSTANT_PWM = 40
 
 def main():
     argument = argparse_setup()
@@ -199,6 +347,8 @@ def main():
     wheel = None
     wheel_callback = None
     vn_connected = False
+    dt = 0.05
+    keyboard_state = None
 
     try:
         # Optional reaction wheel setup; loop still runs if unavailable.
@@ -226,7 +376,6 @@ def main():
                 log_status("Reaction wheel control active")
         except Exception as exc:
             log_status(f"Running without reaction wheel control: {exc}", level="WARN")
-            return
 
         # Detect serial ports when pyserial is available.
         try:
@@ -278,6 +427,17 @@ def main():
         # Register signal handler for graceful Ctrl+C shutdown
         register_signal_handler(wheel, wheel_callback, pi, vn_connected)
 
+        if argument.keytest:
+            keyboard_state = setup_nonblocking_keyboard()
+            if keyboard_state is None:
+                log_status("Keyboard setpoint mode unavailable (stdin is not a terminal)", level="WARN")
+            else:
+                log_status(
+                    "Keyboard setpoint mode ON and open to receiving key input:"
+                )
+                log_status("  ABSOLUTE setpoints (relative to first_quat): W=first_quat, D=90°CW, A=90°CCW, S=180°")
+                log_status("  RELATIVE rotations (from current): Q=rotate 90°CCW, E=rotate 90°CW")
+
         if argument.filter == "Kalman":
             state = np.array([1,0,0,0,0,0,0]) #[q0, q1, q2, q3, omega_x, omega_y, omega_z]
             cov = np.identity(7) * 5e-10
@@ -307,6 +467,11 @@ def main():
                         [0, 0, 0, 0, dt/3, 2*dt/3, dt]
             ])
             q = q * noise_mag
+
+        if argument.filter == "LPF":
+            tau = 0.5
+            mag_filter = LowPassFilter(dt, tau)
+            gyro_filter = LowPassFilter(dt, tau)
 
         file_path = os.path.join(PROJECT_ROOT, "Main", "HardwareScripts", "results", argument.output)
         log_status(f"Writing telemetry log to {file_path}")
@@ -346,26 +511,41 @@ def main():
                 csv_headers.append(csv_raw_headers)
 
             writer.writerow(csv_headers)
-                
 
             previous_quat = None
             previous_wheel_cmd = None
 
             first_quat = vn.read_quat()
-            # 90 degree rotation around x-axis based from starting position (quat at time of first sample)
             target_adjusted = quaternion_multiply(first_quat, TARGET)
+
+            print_rotation_update("Initial orientation", first_quat)
+            # Extract roll and pitch to keep constant; only yaw will change
+            first_roll, first_pitch, first_yaw = quaternion_to_euler_deg(first_quat)
+            current_yaw = first_yaw
+            current_euler = quaternion_to_euler_deg(target_adjusted)
 
             reaction_speeds = [0, 0, 0]
             wheel_rpm = 0
 
-            if argument.filter == "LPF":
-                dt = 0.05 #for the Low pass filter
-                tau = 0.5
-               # mag_filter = LowPassFilter(dt, tau)
-                #gyro_filter = LowPassFilter(dt, tau)
-
             for i in range(SAMPLE_COUNT):
                 quat = np.array(vn.read_quat())
+
+                # CHeck for user input to adjust target quaternion
+                if argument.keytest:
+                    key_type, angle_deg, key_name = read_keypress()
+                    if key_type == "absolute":
+                        # Absolute setpoint: offset yaw from first_yaw, keep roll and pitch from first_quat
+                        current_yaw = first_yaw + angle_deg
+                        target_adjusted = euler_deg_to_quaternion(first_roll, first_pitch, current_yaw)
+                        print_rotation_update(f"Setpoint updated via {key_name} (absolute yaw offset={angle_deg:.1f}deg)", target_adjusted, current_euler)
+                        current_euler = quaternion_to_euler_deg(target_adjusted)
+                    elif key_type == "relative":
+                        # Relative rotation: rotate current yaw by angle_deg
+                        current_yaw += angle_deg
+                        target_adjusted = euler_deg_to_quaternion(first_roll, first_pitch, current_yaw)
+                        print_rotation_update(f"Setpoint updated via {key_name} (relative yaw rotation={angle_deg:.1f}deg)", target_adjusted, current_euler)
+                        current_euler = quaternion_to_euler_deg(target_adjusted)
+
                 # Rad/s (seemingly)
                 angular_velocity = np.array(vn.read_gyro())
                 # Magnetic field in body frame
@@ -376,17 +556,20 @@ def main():
                 sample_idx = max(0, min(sample_idx, len(gps_data) - 1))
                 gps_row = gps_data[sample_idx][1:] if gps_data else ["", "", "", "", "", ""]
 
+                angular_velocity_raw = angular_velocity.copy()
+                b_body_raw = b_body.copy()
+
                 #applying the filter to the magnetometer data
-                #if argument.filter == "LPF":
-                      #  b_body = mag_filter.apply(b_body)
-                       # angular_velocity = gyro_filter.apply(angular_velocity)
+                if argument.filter == "LPF":
+                    b_body = mag_filter.apply(b_body)
+                    angular_velocity = gyro_filter.apply(angular_velocity)
 
                 wheel_cmd = 0
                 wheel_rpm = None
                 if wheel is not None:
                     command_law = argument.control_law # "point", "constant_speed", "constant_pwm"
                     if command_law == "constant_pwm":
-                        wheel_cmd = 40 # hardcode pwm for now
+                        wheel_cmd = HARDCODE_CONSTANT_PWM # hardcode pwm for now
 
                     elif command_law == "constant_speed":
                         kp = 2e-1
@@ -430,21 +613,20 @@ def main():
                     wheel.set_speed(wheel_cmd)
                     wheel_rpm = float(wheel.rpm)
 
-                quat_delta = 0.0
-                if previous_quat is not None:
-                    quat_delta = sum(abs(a - b) for a, b in zip(quat, previous_quat))
+                # quat_delta = 0.0
+                # if previous_quat is not None:
+                    # quat_delta = sum(abs(a - b) for a, b in zip(quat, previous_quat))
 
-                if i % LOG_EVERY_STEPS == 0 or wheel_cmd != previous_wheel_cmd:
-                    rpm_text = "n/a" if wheel_rpm is None else f"{wheel_rpm:.2f}"
-                    log_status(
-                        f"step {i + 1}/{SAMPLE_COUNT} elapsed={elapsed:.2f}s wheel_cmd={wheel_cmd} rpm={rpm_text} quat_delta={quat_delta:.6f}"
-                    )
+                # if i % LOG_EVERY_STEPS == 0 or wheel_cmd != previous_wheel_cmd:
+                #     rpm_text = "n/a" if wheel_rpm is None else f"{wheel_rpm:.2f}"
+                #     log_status(
+                #         f"step {i + 1}/{SAMPLE_COUNT} elapsed={elapsed:.2f}s wheel_cmd={wheel_cmd} rpm={rpm_text} quat_delta={quat_delta:.6f}"
+                #     )
 
                 if argument.visualize == "on":
                     simulator.game_visualize(np.array([quat]), i)
 
-                writer.writerow(
-                    [
+                row = [
                         elapsed,
                         quat[0],
                         quat[1],
@@ -452,11 +634,12 @@ def main():
                         quat[3],
                         wheel_cmd,
                         "" if wheel_rpm is None else wheel_rpm,
-                    ]
-                    + b_body.tolist()
-                    + angular_velocity.tolist()
-                    + gps_row
-                )
+                    ] + b_body.tolist() + angular_velocity.tolist() + gps_row
+
+                if argument.filter == "LPF":
+                    row += b_body_raw.tolist() + angular_velocity_raw.tolist()
+
+                writer.writerow(row)
 
                 previous_quat = quat
                 previous_wheel_cmd = wheel_cmd
@@ -471,6 +654,7 @@ def main():
         sys.exit(1)
 
     finally:
+        restore_keyboard(keyboard_state)
         cleanup(wheel, wheel_callback, pi, vn_connected)
 
 
