@@ -17,13 +17,14 @@ import signal
 import sys
 import time
 import argparse
-#from ukf.low_pass_filter.lowpassfilter import LowPassFilter
 
 # Add repo root so project modules can be imported from this script location.
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_ROOT)
 
 import numpy as np
+from ukf.low_pass_filter.lowpassfilter import LowPassFilter
+
 
 import HardwareInterface.vn100.vn100_interface as vn
 import Simulator.visualizer as simulator
@@ -338,7 +339,7 @@ def main():
     argument = argparse_setup()
     log_status("Starting BERTHA hardware script")
     start = time.time()
-    # gps_data = load_gps_data()
+    gps_data = load_gps_data()
 
     pi = None
     wheel = None
@@ -506,7 +507,6 @@ def main():
 
             writer.writerow(csv_headers)
                 
-
             previous_quat = None
             previous_wheel_cmd = None
 
@@ -526,8 +526,8 @@ def main():
             if argument.filter == "LPF":
                 dt = 0.05 #for the Low pass filter
                 tau = 0.5
-               # mag_filter = LowPassFilter(dt, tau)
-                #gyro_filter = LowPassFilter(dt, tau)
+                mag_filter = LowPassFilter(dt, tau)
+                gyro_filter = LowPassFilter(dt, tau)
 
             for i in range(SAMPLE_COUNT):
                 quat = np.array(vn.read_quat())
@@ -556,10 +556,13 @@ def main():
                 sample_idx = max(0, min(sample_idx, len(gps_data) - 1))
                 gps_row = gps_data[sample_idx][1:] if gps_data else ["", "", "", "", "", ""]
 
+                angular_velocity_raw = angular_velocity.copy()
+                b_body_raw = b_body.copy()
+
                 #applying the filter to the magnetometer data
-                #if argument.filter == "LPF":
-                      #  b_body = mag_filter.apply(b_body)
-                       # angular_velocity = gyro_filter.apply(angular_velocity)
+                if argument.filter == "LPF":
+                        b_body = mag_filter.apply(b_body)
+                        angular_velocity = gyro_filter.apply(angular_velocity)
 
                 wheel_cmd = 0
                 wheel_rpm = None
@@ -623,8 +626,7 @@ def main():
                 if argument.visualize == "on":
                     simulator.game_visualize(np.array([quat]), i)
 
-                writer.writerow(
-                    [
+                row = [
                         elapsed,
                         quat[0],
                         quat[1],
@@ -632,11 +634,12 @@ def main():
                         quat[3],
                         wheel_cmd,
                         "" if wheel_rpm is None else wheel_rpm,
-                    ]
-                    + b_body.tolist()
-                    + angular_velocity.tolist()
-                    + gps_row
-                )
+                    ] + b_body.tolist() + angular_velocity.tolist() + gps_row                
+               
+                if argument.filter == "LPF":
+                    row += b_body_raw.tolist() + angular_velocity_raw.tolist()
+
+                writer.writerow(row)
 
                 previous_quat = quat
                 previous_wheel_cmd = wheel_cmd
