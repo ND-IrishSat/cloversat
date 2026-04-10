@@ -15,7 +15,7 @@ import signal
 import sys
 import time
 import argparse
-# from ukf.low_pass_filter.lowpassfilter import LowPassFilter
+#from ukf.low_pass_filter.lowpassfilter import LowPassFilter
 
 # Add repo root so project modules can be imported from this script location.
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -180,6 +180,7 @@ def argparse_setup():
         choices = ["LPF", "Kalman", "None"],
         default = "None",
     )
+
     return parser.parse_args()
 
 def main():
@@ -307,8 +308,7 @@ def main():
 
         with open(file_path, "w", newline="") as log_file:
             writer = csv.writer(log_file)
-            writer.writerow(
-                [
+            csv_headers = [
                     "elapsed_s",
                     "q_w",
                     "q_x",
@@ -329,7 +329,19 @@ def main():
                     "gps_y",
                     "gps_z",
                 ]
-            )
+            csv_raw_headers = [
+                "mag_x_raw",
+                "mag_y_raw",
+                "mag_z_raw",
+                "gyro_x_raw",
+                "gyro_y_raw",
+                "gyro_z_raw",
+            ]
+            if argument.filter == "LPF":
+                csv_headers.append(csv_raw_headers)
+
+            writer.writerow(csv_headers)
+                
 
             previous_quat = None
             previous_wheel_cmd = None
@@ -341,10 +353,11 @@ def main():
             reaction_speeds = [0, 0, 0]
             wheel_rpm = 0
 
-            # if argument.filter == "LPF":
-                # dt = 0.05 #for the Low pass filter
-                # tau = 0.5
-                # mag_filter = LowPassFilter(dt, tau)
+            if argument.filter == "LPF":
+                dt = 0.05 #for the Low pass filter
+                tau = 0.5
+               # mag_filter = LowPassFilter(dt, tau)
+                #gyro_filter = LowPassFilter(dt, tau)
 
             for i in range(SAMPLE_COUNT):
                 quat = np.array(vn.read_quat())
@@ -359,10 +372,9 @@ def main():
                 gps_row = gps_data[sample_idx][1:] if gps_data else ["", "", "", "", "", ""]
 
                 #applying the filter to the magnetometer data
-                # if argument.filter == "LPF":
-                    # mag = np.array(gps_row[0:3])
-                    # mag_filtered = mag_filter.apply(mag)
-                    # gps_row = [*mag_filtered, *gps_row[3:6]]
+                #if argument.filter == "LPF":
+                      #  b_body = mag_filter.apply(b_body)
+                       # angular_velocity = gyro_filter.apply(angular_velocity)
 
                 wheel_cmd = 0
                 wheel_rpm = None
