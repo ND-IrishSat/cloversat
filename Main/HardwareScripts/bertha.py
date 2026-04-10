@@ -7,6 +7,7 @@ commands the reaction wheel while logging telemetry.
 '''
 
 import csv
+from datetime import datetime
 import errno
 import importlib
 import os
@@ -180,6 +181,11 @@ def argparse_setup():
         choices = ["LPF", "Kalman", "None"],
         default = "None",
     )
+    parser.add_argument(
+        "--output",
+        default=f"bertha_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv",
+        help="Filename for telemetry CSV log (default: bertha_results_{timestamp}.csv)",
+    )
 
     return parser.parse_args()
 
@@ -302,8 +308,7 @@ def main():
             ])
             q = q * noise_mag
 
-        # file_path = os.path.join(PROJECT_ROOT, "Main", "HardwareScripts", "results", "bertha_imu_wheel_log.csv")
-        file_path = os.path.join(PROJECT_ROOT, "Main", "HardwareScripts", "results", "blank_spin.csv")
+        file_path = os.path.join(PROJECT_ROOT, "Main", "HardwareScripts", "results", argument.output)
         log_status(f"Writing telemetry log to {file_path}")
 
         with open(file_path, "w", newline="") as log_file:
