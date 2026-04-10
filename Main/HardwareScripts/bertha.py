@@ -57,56 +57,56 @@ def euler_deg_to_quaternion(roll_deg, pitch_deg, yaw_deg):
     roll = np.deg2rad(roll_deg)
     pitch = np.deg2rad(pitch_deg)
     yaw = np.deg2rad(yaw_deg)
-    
+
     cy = np.cos(yaw * 0.5)
     sy = np.sin(yaw * 0.5)
     cp = np.cos(pitch * 0.5)
     sp = np.sin(pitch * 0.5)
     cr = np.cos(roll * 0.5)
     sr = np.sin(roll * 0.5)
-    
+
     w = cr * cp * cy + sr * sp * sy
     x = sr * cp * cy - cr * sp * sy
     y = cr * sp * cy + sr * cp * sy
     z = cr * cp * sy - sr * sp * cy
-    
+
     return np.array([w, x, y, z])
 
 
 def quaternion_to_euler_deg(q):
     """Convert quaternion (w, x, y, z) to Euler angles in degrees (roll, pitch, yaw)."""
     w, x, y, z = q
-    
+
     # Roll (x-axis rotation)
     sinr_cosp = 2 * (w * x + y * z)
     cosr_cosp = 1 - 2 * (x * x + y * y)
     roll = np.arctan2(sinr_cosp, cosr_cosp)
-    
+
     # Pitch (y-axis rotation)
     sinp = 2 * (w * y - z * x)
     if abs(sinp) >= 1:
         pitch = np.copysign(np.pi / 2, sinp)
     else:
         pitch = np.arcsin(sinp)
-    
+
     # Yaw (z-axis rotation)
     siny_cosp = 2 * (w * z + x * y)
     cosy_cosp = 1 - 2 * (y * y + z * z)
     yaw = np.arctan2(siny_cosp, cosy_cosp)
-    
+
     return np.rad2deg(roll), np.rad2deg(pitch), np.rad2deg(yaw)
 
 
 def print_rotation_update(label, quat, prev_euler=None):
     """Print rotation in Euler degrees and show which axis changed if prev_euler is provided."""
     roll, pitch, yaw = quaternion_to_euler_deg(quat)
-    
+
     if prev_euler is not None:
         prev_roll, prev_pitch, prev_yaw = prev_euler
         roll_delta = abs(roll - prev_roll)
         pitch_delta = abs(pitch - prev_pitch)
         yaw_delta = abs(yaw - prev_yaw)
-        
+
         # Determine which axis changed the most
         max_delta = max(roll_delta, pitch_delta, yaw_delta)
         if abs(max_delta - roll_delta) < 1e-6:
@@ -115,7 +115,7 @@ def print_rotation_update(label, quat, prev_euler=None):
             axis = "PITCH"
         else:
             axis = "YAW"
-        
+
         log_status(f"{label}: roll={roll:.1f}deg, pitch={pitch:.1f}deg, yaw={yaw:.1f}deg [{axis}]")
     else:
         log_status(f"{label}: roll={roll:.1f}deg, pitch={pitch:.1f}deg, yaw={yaw:.1f}deg")
@@ -335,6 +335,8 @@ def argparse_setup():
     )
     return parser.parse_args()
 
+HARDCODE_CONSTANT_PWM = 40
+
 def main():
     argument = argparse_setup()
     log_status("Starting BERTHA hardware script")
@@ -347,7 +349,6 @@ def main():
     vn_connected = False
     dt = 0.05
     keyboard_state = None
-
 
     try:
         # Optional reaction wheel setup; loop still runs if unavailable.
@@ -375,7 +376,6 @@ def main():
                 log_status("Reaction wheel control active")
         except Exception as exc:
             log_status(f"Running without reaction wheel control: {exc}", level="WARN")
-    #         return
 
         # Detect serial ports when pyserial is available.
         try:
@@ -468,6 +468,11 @@ def main():
             ])
             q = q * noise_mag
 
+        if argument.filter == "LPF":
+            tau = 0.5
+            mag_filter = LowPassFilter(dt, tau)
+            gyro_filter = LowPassFilter(dt, tau)
+
         file_path = os.path.join(PROJECT_ROOT, "Main", "HardwareScripts", "results", argument.output)
         log_status(f"Writing telemetry log to {file_path}")
 
@@ -506,13 +511,12 @@ def main():
                 csv_headers.append(csv_raw_headers)
 
             writer.writerow(csv_headers)
-                
+
             previous_quat = None
             previous_wheel_cmd = None
 
             first_quat = vn.read_quat()
             target_adjusted = quaternion_multiply(first_quat, TARGET)
-
 
             print_rotation_update("Initial orientation", first_quat)
             # Extract roll and pitch to keep constant; only yaw will change
@@ -523,14 +527,10 @@ def main():
             reaction_speeds = [0, 0, 0]
             wheel_rpm = 0
 
-            if argument.filter == "LPF":
-                dt = 0.05 #for the Low pass filter
-                tau = 0.5
-                mag_filter = LowPassFilter(dt, tau)
-                gyro_filter = LowPassFilter(dt, tau)
-
             for i in range(SAMPLE_COUNT):
                 quat = np.array(vn.read_quat())
+
+                # CHeck for user input to adjust target quaternion
                 if argument.keytest:
                     key_type, angle_deg, key_name = read_keypress()
                     if key_type == "absolute":
@@ -561,15 +561,15 @@ def main():
 
                 #applying the filter to the magnetometer data
                 if argument.filter == "LPF":
-                        b_body = mag_filter.apply(b_body)
-                        angular_velocity = gyro_filter.apply(angular_velocity)
+                    b_body = mag_filter.apply(b_body)
+                    angular_velocity = gyro_filter.apply(angular_velocity)
 
                 wheel_cmd = 0
                 wheel_rpm = None
                 if wheel is not None:
                     command_law = argument.control_law # "point", "constant_speed", "constant_pwm"
                     if command_law == "constant_pwm":
-                        wheel_cmd = 40 # hardcode pwm for now
+                        wheel_cmd = HARDCODE_CONSTANT_PWM # hardcode pwm for now
 
                     elif command_law == "constant_speed":
                         kp = 2e-1
@@ -613,9 +613,9 @@ def main():
                     wheel.set_speed(wheel_cmd)
                     wheel_rpm = float(wheel.rpm)
 
-                quat_delta = 0.0
-                if previous_quat is not None:
-                    quat_delta = sum(abs(a - b) for a, b in zip(quat, previous_quat))
+                # quat_delta = 0.0
+                # if previous_quat is not None:
+                    # quat_delta = sum(abs(a - b) for a, b in zip(quat, previous_quat))
 
                 # if i % LOG_EVERY_STEPS == 0 or wheel_cmd != previous_wheel_cmd:
                 #     rpm_text = "n/a" if wheel_rpm is None else f"{wheel_rpm:.2f}"
@@ -634,8 +634,8 @@ def main():
                         quat[3],
                         wheel_cmd,
                         "" if wheel_rpm is None else wheel_rpm,
-                    ] + b_body.tolist() + angular_velocity.tolist() + gps_row                
-               
+                    ] + b_body.tolist() + angular_velocity.tolist() + gps_row
+
                 if argument.filter == "LPF":
                     row += b_body_raw.tolist() + angular_velocity_raw.tolist()
 
