@@ -609,7 +609,7 @@ def main():
                     else:
                         wheel_cmd = 0
 
-                    print("PWM command: ", wheel_cmd)
+                    #print("PWM command: ", wheel_cmd)
                     wheel.set_speed(wheel_cmd)
                     wheel_rpm = float(wheel.rpm)
 
