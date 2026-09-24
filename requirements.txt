@@ -1,0 +1,4 @@
+numpy
+scipy
+sgp4        # reference SGP4 implementation for the Python stage
+pytest
